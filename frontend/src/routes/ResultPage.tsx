@@ -6,6 +6,7 @@ import AnalysisTab from "../components/results/AnalysisTab";
 import ReportTab from "../components/results/ReportTab";
 import TranscriptionTab from "../components/results/TranscriptionTab";
 import ErrorBanner from "../components/ui/ErrorBanner";
+import ErrorBoundary from "../components/ui/ErrorBoundary";
 import Icon from "../components/ui/Icon";
 import { formatDurationSeconds } from "../lib/format";
 
@@ -78,23 +79,25 @@ export default function ResultPage() {
         ))}
       </div>
 
-      {activeTab === "resumo" && (
-        <SummaryTab
-          analysis={analysis}
-          result={resultData?.analysis_result ?? null}
-          resultLoading={resultLoading}
-        />
-      )}
-      {activeTab === "analise" && (
-        <AnalysisTab result={resultData?.analysis_result ?? null} loading={resultLoading} />
-      )}
-      {activeTab === "relatorio" && <ReportTab analysisId={analysis.id} />}
-      {activeTab === "transcricao" && (
-        <TranscriptionTab
-          transcription={transcriptionData?.transcription ?? null}
-          loading={transcriptionLoading}
-        />
-      )}
+      <ErrorBoundary key={activeTab}>
+        {activeTab === "resumo" && (
+          <SummaryTab
+            analysis={analysis}
+            result={resultData?.analysis_result ?? null}
+            resultLoading={resultLoading}
+          />
+        )}
+        {activeTab === "analise" && (
+          <AnalysisTab result={resultData?.analysis_result ?? null} loading={resultLoading} />
+        )}
+        {activeTab === "relatorio" && <ReportTab analysisId={analysis.id} />}
+        {activeTab === "transcricao" && (
+          <TranscriptionTab
+            transcription={transcriptionData?.transcription ?? null}
+            loading={transcriptionLoading}
+          />
+        )}
+      </ErrorBoundary>
     </div>
   );
 }
