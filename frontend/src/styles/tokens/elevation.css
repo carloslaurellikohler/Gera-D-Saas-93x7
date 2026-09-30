@@ -1,0 +1,45 @@
+/* ============================================================
+   GerAD — Elevation (dual key + ambient shadows) & Shape
+   ============================================================ */
+
+:root {
+  --elevation-0: none;
+  --elevation-1: 0px 1px 2px rgba(0,0,0,0.30), 0px 1px 3px rgba(0,0,0,0.15);
+  --elevation-2: 0px 1px 2px rgba(0,0,0,0.30), 0px 2px 6px rgba(0,0,0,0.15);
+  --elevation-3: 0px 4px 8px rgba(0,0,0,0.30), 0px 2px 8px rgba(0,0,0,0.15);
+  --elevation-4: 0px 6px 10px rgba(0,0,0,0.30), 0px 4px 10px rgba(0,0,0,0.15);
+  --elevation-5: 0px 8px 12px rgba(0,0,0,0.30), 0px 6px 12px rgba(0,0,0,0.15);
+
+  /* Shape scale */
+  --corner-none: 0px;
+  --corner-extra-small: 4px;
+  --corner-small: 8px;
+  --corner-medium: 12px;
+  --corner-large: 16px;
+  --corner-semi-large: 20px;
+  --corner-medium-large: 20px;
+  --corner-stack-large: 24px;
+  --corner-extra-large: 28px;
+  --corner-double-large: 32px;
+  --corner-hiper-large: 64px;
+  --corner-full: 100px;
+}
+
+.gerad-elevation-0 { box-shadow: var(--elevation-0); }
+.gerad-elevation-1 { box-shadow: var(--elevation-1); }
+.gerad-elevation-2 { box-shadow: var(--elevation-2); }
+.gerad-elevation-3 { box-shadow: var(--elevation-3); }
+.gerad-elevation-4 { box-shadow: var(--elevation-4); }
+.gerad-elevation-5 { box-shadow: var(--elevation-5); }
+
+.corner-none { border-radius: var(--corner-none); }
+.corner-extra-small { border-radius: var(--corner-extra-small); }
+.corner-small { border-radius: var(--corner-small); }
+.corner-medium { border-radius: var(--corner-medium); }
+.corner-large { border-radius: var(--corner-large); }
+.corner-semi-large { border-radius: var(--corner-semi-large); }
+.corner-stack-large { border-radius: var(--corner-stack-large); }
+.corner-extra-large { border-radius: var(--corner-extra-large); }
+.corner-double-large { border-radius: var(--corner-double-large); }
+.corner-hiper-large { border-radius: var(--corner-hiper-large); }
+.corner-full { border-radius: var(--corner-full); }

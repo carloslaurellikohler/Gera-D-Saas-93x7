@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import ObjectiveSelect from "../components/forms/ObjectiveSelect";
 import FileDropzone from "../components/forms/FileDropzone";
+import ErrorBanner from "../components/ui/ErrorBanner";
+import Icon from "../components/ui/Icon";
 import { useCreateAnalysis } from "../hooks/useCreateAnalysis";
 import type { Objective } from "../types/analysis";
 import type { InputTypeChoice } from "../lib/uploadConstraints";
@@ -54,13 +56,16 @@ export default function NewAnalysisPage() {
   };
 
   return (
-    <div>
-      <div className="page-header">
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 280px", gap: 24, alignContent: "start" }}>
+      <div style={{ gridColumn: "1 / 3" }} className="page-title-group">
+        <span className="page-breadcrumb">Análises › Nova análise</span>
         <h1>Nova análise</h1>
       </div>
 
       <form className="card" onSubmit={handleSubmit}>
-        <div className="form-field">
+        {submitError && <ErrorBanner>{submitError}</ErrorBanner>}
+
+        <div className="form-field" style={{ marginTop: submitError ? 18 : 0 }}>
           <label htmlFor="participant">Participante</label>
           <input
             id="participant"
@@ -140,15 +145,41 @@ export default function NewAnalysisPage() {
               setFileError(error);
             }}
           />
-          {fileError && <p className="error-text">{fileError}</p>}
+          {fileError && (
+            <p className="error-text">
+              <Icon name="error" size={16} />
+              {fileError}
+            </p>
+          )}
         </div>
 
-        {submitError && <p className="error-text">{submitError}</p>}
-
-        <button type="submit" className="btn btn-primary" disabled={createAnalysis.isPending}>
-          {createAnalysis.isPending ? "Enviando..." : "Iniciar análise"}
-        </button>
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 6 }}>
+          <button type="submit" className="btn btn-primary" disabled={createAnalysis.isPending}>
+            {createAnalysis.isPending ? "Enviando..." : "Iniciar análise"}
+            <Icon name="arrow_forward" size={20} />
+          </button>
+        </div>
       </form>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="card">
+          <span className="kpi-label">Formatos aceitos</span>
+          <p style={{ fontSize: 13, lineHeight: 1.6, marginTop: 10 }}>
+            Transcrição: <b>.docx, .txt</b>
+            <br />
+            Áudio e vídeo: <b>.mp3, .mp4</b>
+            <br />
+            Tamanho máximo: <b>500 MB</b>
+          </p>
+        </div>
+        <div className="card">
+          <span className="kpi-label">Depois do envio</span>
+          <p className="page-subtitle" style={{ fontSize: 13, lineHeight: 1.6, marginTop: 10 }}>
+            A análise leva de alguns segundos a alguns minutos. Você pode acompanhar o andamento ou
+            voltar ao dashboard.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,6 @@
+/* GerAD design tokens — global entry point. Only @import lines belong here. */
+@import "./fonts.css";
+@import "./colors.css";
+@import "./typography.css";
+@import "./spacing.css";
+@import "./elevation.css";

@@ -1,50 +1,25 @@
 import type { ReactNode } from "react";
-import { Routes, Route, Link, NavLink } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import DashboardPage from "./routes/DashboardPage";
 import NewAnalysisPage from "./routes/NewAnalysisPage";
 import ProcessingPage from "./routes/ProcessingPage";
 import ResultPage from "./routes/ResultPage";
 import LoginPage from "./routes/LoginPage";
+import MetricsPage from "./routes/MetricsPage";
+import LibraryPage from "./routes/LibraryPage";
+import AssistantPage from "./routes/AssistantPage";
+import AdminDashboardPage from "./routes/AdminDashboardPage";
+import CalibrationPage from "./routes/CalibrationPage";
+import UserAdminPage from "./routes/UserAdminPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import { useAuth } from "./context/AuthContext";
+import AdminRoute from "./components/auth/AdminRoute";
+import Sidebar from "./components/ui/Sidebar";
 import "./App.css";
 
 function AuthenticatedShell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
-
   return (
     <div className="app-shell app-shell-authenticated">
-      <aside className="app-sidebar">
-        <Link to="/" className="app-logo">
-          GerAD
-        </Link>
-        <nav className="app-nav">
-          <NavLink to="/" end className="nav-link">
-            Dashboard
-          </NavLink>
-          <NavLink to="/analyses/new" className="nav-link">
-            Nova Análise
-          </NavLink>
-          <span className="nav-link disabled" aria-disabled="true">
-            Métricas
-          </span>
-          <span className="nav-link disabled" aria-disabled="true">
-            Conteúdo
-          </span>
-          <span className="nav-link disabled" aria-disabled="true">
-            Assistente de IA
-          </span>
-        </nav>
-        <div className="user-menu">
-          <div className="user-menu-info">
-            <span className="user-menu-name">{user?.name}</span>
-            <span className="user-menu-role">{user?.role}</span>
-          </div>
-          <button type="button" className="btn btn-secondary user-menu-logout" onClick={() => logout()}>
-            Sair
-          </button>
-        </div>
-      </aside>
+      <Sidebar />
       <main className="app-main">{children}</main>
     </div>
   );
@@ -84,6 +59,60 @@ function App() {
           element={
             <AuthenticatedShell>
               <ResultPage />
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/metricas"
+          element={
+            <AuthenticatedShell>
+              <MetricsPage />
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/biblioteca"
+          element={
+            <AuthenticatedShell>
+              <LibraryPage />
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/assistente"
+          element={
+            <AuthenticatedShell>
+              <AssistantPage />
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <AuthenticatedShell>
+              <AdminRoute>
+                <AdminDashboardPage />
+              </AdminRoute>
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/calibracao"
+          element={
+            <AuthenticatedShell>
+              <AdminRoute>
+                <CalibrationPage />
+              </AdminRoute>
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/usuarios"
+          element={
+            <AuthenticatedShell>
+              <AdminRoute>
+                <UserAdminPage />
+              </AdminRoute>
             </AuthenticatedShell>
           }
         />

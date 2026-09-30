@@ -1,0 +1,184 @@
+/* ============================================================
+   GerAD — Color System
+   Semantic role tokens. Never use raw hex in components —
+   reference the role tokens below. Dark mode overrides at end.
+   ============================================================ */
+
+:root {
+  /* ---- Brand primitives ---- */
+  --gerad-navy:        #00003C; /* Azul GerAD — institutional identity */
+  --gerad-navy-700:    #10113f;
+  --gerad-navy-600:    #22245a;
+  --gerad-navy-500:    #3a3c74;
+  --gerad-navy-200:    #c3c4d6;
+  --gerad-navy-100:    #e4e5ee;
+  --gerad-navy-50:     #f2f2f7;
+
+  /* Dourado GerAD — the action / brand-primary color. */
+  --gerad-gold:        #c7b06a;
+  --gerad-gold-700:    #9c8845; /* darkest — deep hover/press */
+  --gerad-gold-600:    #b39c55; /* pressed */
+  --gerad-gold-100:    #f0e9d3; /* light tint */
+  --gerad-gold-50:     #f8f4e9; /* softest tint */
+
+  /* ---- Neutrals ---- */
+  --white: #ffffff;
+  --black: #000000;
+  --gray-50:  #f5f6f8;
+  --gray-100: #eceef2;
+  --gray-200: #dde0e7;
+  --gray-300: #c4c9d3;
+  --gray-400: #9aa1af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5160;
+  --gray-700: #333846;
+  --gray-800: #1f2430;
+  --gray-900: #12141c;
+  --gray-950: #0a0b10;
+
+  /* ---- Semantic primitives ---- */
+  --positive:      #00c853;
+  --positive-dark: #0a8f43;
+  --info:          #2196f3;
+  --info-dark:     #0d6fca;
+  --alert:         #ffc107;
+  --alert-dark:    #b98900;
+  --negative:      #b00020;
+  --negative-dark: #7d0017;
+
+  /* ---- Hue spectrum (10 hues × 5 levels; content = darker as n grows) ---- */
+  --blue:    #2196f3; --blue-2:  #1e83d6; --blue-3:  #1a6fb8; --blue-4:  #155a97; --blue-5:  #0f3f6b;
+  --purple:  #7e57c2; --purple-2:#6f46b3; --purple-3:#5e3a97; --purple-4:#4b2e79; --purple-5:#382258;
+  --violet:  #9575cd; --violet-2:#8360c1; --violet-3:#6f4dad; --violet-4:#583c8b; --violet-5:#3f2b66;
+  --red-h:   #e4002b; --red-h2: #c4001f; --red-h3: #a10019; --red-h4: #7d0014; --red-h5: #57000e;
+  --pink:    #ec407a; --pink-2:  #d62e69; --pink-3:  #b62256; --pink-4:  #931a45; --pink-5:  #6b1230;
+  --orange:  #fb8c00; --orange-2:#e07c00; --orange-3:#bd6900; --orange-4:#985400; --orange-5:#6d3c00;
+  --yellow:  #ffc107; --yellow-2:#e0a800; --yellow-3:#bd8d00; --yellow-4:#977100; --yellow-5:#6d5100;
+  --green:   #00c853; --green-2: #00a847; --green-3: #008a3b; --green-4: #006c2e; --green-5: #004c20;
+  --teal:    #009688; --teal-2:  #008176; --teal-3:  #006b62; --teal-4:  #00544d; --teal-5:  #003a35;
+  --cyan:    #00bcd4; --cyan-2:  #00a2b8; --cyan-3:  #008699; --cyan-4:  #006979; --cyan-5:  #004a55;
+
+  /* ================= Semantic roles — Light (default) ================= */
+
+  /* Content / foreground */
+  --content-primary:          var(--gray-900);
+  --content-secondary:        var(--gray-600);
+  --content-tertiary:         var(--gray-500);
+  --content-disabled:         var(--gray-400);
+  --content-primary-inverse:  var(--white);
+  --content-white:            var(--white);
+  --content-black:            var(--black);
+  --content-brand-primary:    var(--gerad-gold);
+  --content-brand-secondary:  var(--gerad-navy);
+  --content-on-brand-primary: var(--gerad-navy); /* text/icons ON the gold fill (contrast) */
+  --content-link:             var(--info-dark);
+  --content-link-hover:       var(--blue-4);
+  --content-link-pressed:     var(--blue-5);
+  --content-info:             var(--info-dark);
+  --content-alert:            var(--alert-dark);
+  --content-negative:         var(--negative);
+  --content-positive:         var(--positive-dark);
+
+  /* Background / surfaces */
+  --background-primary:        var(--white);
+  --background-secondary:      var(--gray-50);
+  --background-tertiary:       var(--gray-100);
+  --background-hover:          rgba(0,0,60,0.04);
+  --background-pressed:        rgba(0,0,60,0.10);
+  --background-selected:       var(--gerad-gold-50);
+  --background-disabled:       var(--gray-100);
+  --background-inverse:        var(--gerad-navy);
+  /* brand gold surfaces: n1 = solid (primary actions) → n5 = softest tint */
+  --background-brand-primary-n1: var(--gerad-gold);
+  --background-brand-primary-n2: var(--gerad-gold-600);
+  --background-brand-primary-n3: var(--gerad-gold-100);
+  --background-brand-primary-n4: #f4efdf;
+  --background-brand-primary-n5: var(--gerad-gold-50);
+  /* brand navy surfaces */
+  --background-brand-secondary-n1: var(--gerad-navy);
+  --background-brand-secondary-n2: var(--gerad-navy-600);
+  --background-brand-secondary-n5: var(--gerad-navy-50);
+  --background-info-n1:     var(--info);
+  --background-info-n2:     #e3f2fd;
+  --background-alert-n1:    var(--alert);
+  --background-alert-n2:    #fff8e1;
+  --background-negative-n1: var(--negative);
+  --background-negative-n2: #fde7ea;
+  --background-positive-n1: var(--positive);
+  --background-positive-n2: #e4f8ed;
+
+  /* Border */
+  --border-primary:       var(--gray-300);
+  --border-secondary:     var(--gray-200);
+  --border-tertiary:      var(--gray-100);
+  --border-disabled:      var(--gray-200);
+  --border-brand-primary: var(--gerad-gold);
+  --border-focus:         var(--info);
+  --border-info-n1:       var(--info);
+  --border-info-n2:       #90caf9;
+  --border-alert-n1:      var(--alert);
+  --border-alert-n2:      #ffe082;
+  --border-negative-n1:   var(--negative);
+  --border-negative-n2:   #ef9a9a;
+  --border-positive-n1:   var(--positive);
+  --border-positive-n2:   #a5e8c1;
+
+  /* Opacity scale (neutral) */
+  --opacity-neutral-3:  rgba(0,0,60,0.03);
+  --opacity-neutral-5:  rgba(0,0,60,0.05);
+  --opacity-neutral-10: rgba(0,0,60,0.10);
+  --opacity-neutral-20: rgba(0,0,60,0.20);
+  --opacity-neutral-40: rgba(0,0,60,0.40);
+  --opacity-neutral-60: rgba(0,0,60,0.60);
+  --opacity-neutral-inverse-10: rgba(255,255,255,0.10);
+  --opacity-neutral-inverse-20: rgba(255,255,255,0.20);
+  --opacity-neutral-inverse-40: rgba(255,255,255,0.40);
+  --brand-primary-opacity-10: rgba(199,176,106,0.14);
+  --brand-primary-opacity-20: rgba(199,176,106,0.26);
+}
+
+/* ================= Semantic roles — Dark ================= */
+.dark-theme {
+  --content-primary:          #eceef2;
+  --content-secondary:        #b6bcc8;
+  --content-tertiary:         #8890a0;
+  --content-disabled:         #5a6070;
+  --content-primary-inverse:  var(--gray-900);
+  --content-brand-primary:    #d9c589;
+  --content-brand-secondary:  #b8b9d6;
+  --content-on-brand-primary: var(--gerad-navy);
+  --content-link:             #6fb7f5;
+  --content-link-hover:       #97cbf8;
+  --content-link-pressed:     #b9dcfb;
+  --content-info:             #6fb7f5;
+  --content-alert:            #ffd454;
+  --content-negative:         #ff6b81;
+  --content-positive:         #4ce08a;
+
+  --background-primary:        #0c0d1a;
+  --background-secondary:      #14162a;
+  --background-tertiary:       #1d2038;
+  --background-hover:          rgba(255,255,255,0.06);
+  --background-pressed:        rgba(255,255,255,0.12);
+  --background-selected:       rgba(199,176,106,0.22);
+  --background-disabled:       #1d2038;
+  --background-inverse:        var(--white);
+  --background-brand-primary-n1: var(--gerad-gold);
+  --background-brand-primary-n2: #d6be77;
+  --background-brand-primary-n3: rgba(199,176,106,0.34);
+  --background-brand-primary-n4: rgba(199,176,106,0.22);
+  --background-brand-primary-n5: rgba(199,176,106,0.14);
+  --background-brand-secondary-n1: #2a2c6e;
+  --background-brand-secondary-n2: #1c1e4e;
+  --background-brand-secondary-n5: rgba(58,60,116,0.20);
+  --background-info-n2:     rgba(33,150,243,0.16);
+  --background-alert-n2:    rgba(255,193,7,0.16);
+  --background-negative-n2: rgba(176,0,32,0.22);
+  --background-positive-n2: rgba(0,200,83,0.16);
+
+  --border-primary:       #333849;
+  --border-secondary:     #262b3a;
+  --border-tertiary:      #1d2038;
+  --border-disabled:      #2a2f3e;
+  --border-focus:         #6fb7f5;
+}

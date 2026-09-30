@@ -1,0 +1,34 @@
+/* ============================================================
+   GerAD — Spacing (base unit 8px)
+   Scale: 2 4 8 10 12 14 16 18 20 24 32 40 44 48 56 64 72 80 88 96 104 112 120
+   Utility classes: {p|m}{t|r|b|l|x|y|a}-{value}
+   ============================================================ */
+
+:root {
+  --space-2: 2px;   --space-4: 4px;   --space-8: 8px;   --space-10: 10px;
+  --space-12: 12px; --space-14: 14px; --space-16: 16px; --space-18: 18px;
+  --space-20: 20px; --space-24: 24px; --space-32: 32px; --space-40: 40px;
+  --space-44: 44px; --space-48: 48px; --space-56: 56px; --space-64: 64px;
+  --space-72: 72px; --space-80: 80px; --space-88: 88px; --space-96: 96px;
+  --space-104: 104px; --space-112: 112px; --space-120: 120px;
+}
+
+/* Flexbox grid utilities */
+.gerad-grid-fr { display: flex; flex-direction: row; }
+.gerad-grid-fc { display: flex; flex-direction: column; }
+.gerad-grid-frr { display: flex; flex-direction: row-reverse; }
+.gerad-grid-fcr { display: flex; flex-direction: column-reverse; }
+.gerad-grid-jcs { justify-content: flex-start; }
+.gerad-grid-jcc { justify-content: center; }
+.gerad-grid-jce { justify-content: flex-end; }
+.gerad-grid-between { justify-content: space-between; }
+.gerad-grid-around { justify-content: space-around; }
+.gerad-grid-ais { align-items: flex-start; }
+.gerad-grid-aic { align-items: center; }
+.gerad-grid-aie { align-items: flex-end; }
+.gerad-grid-aistr { align-items: stretch; }
+.gerad-grid-gap-4 { gap: 4px; }
+.gerad-grid-gap-8 { gap: 8px; }
+.gerad-grid-gap-16 { gap: 16px; }
+.gerad-grid-gap-24 { gap: 24px; }
+.gerad-grid-gap-32 { gap: 32px; }

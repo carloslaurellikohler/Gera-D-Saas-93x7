@@ -1,0 +1,60 @@
+/* ============================================================
+   GerAD — Typography
+   Brand (Roboto Slab) for headings; Plain (Montserrat) for UI/body.
+   Class convention: {family}-{use}-{weight}
+   ============================================================ */
+
+:root {
+  --font-brand: "Roboto Slab", Georgia, serif;
+  --font-plain: "Montserrat", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Type scale (size / line-height) */
+  --display-large-size: 57px;   --display-large-lh: 64px;
+  --display-medium-size: 45px;  --display-medium-lh: 52px;
+  --display-small-size: 36px;   --display-small-lh: 44px;
+  --headline-large-size: 32px;  --headline-large-lh: 40px;
+  --headline-medium-size: 28px; --headline-medium-lh: 36px;
+  --headline-small-size: 24px;  --headline-small-lh: 32px;
+  --title-large-size: 22px;     --title-large-lh: 28px;
+  --title-medium-size: 16px;    --title-medium-lh: 24px;
+  --title-small-size: 14px;     --title-small-lh: 20px;
+  --body-large-size: 16px;      --body-large-lh: 24px;
+  --body-medium-size: 14px;     --body-medium-lh: 20px;
+  --body-small-size: 12px;      --body-small-lh: 16px;
+  --label-large-size: 14px;     --label-large-lh: 20px;
+  --label-medium-size: 12px;    --label-medium-lh: 16px;
+  --label-small-size: 11px;     --label-small-lh: 16px;
+}
+
+/* ---- Display (brand serif) ---- */
+.brand-display-large  { font-family: var(--font-brand); font-weight: 700; font-size: var(--display-large-size);  line-height: var(--display-large-lh);  letter-spacing: -0.5px; }
+.brand-display-medium { font-family: var(--font-brand); font-weight: 700; font-size: var(--display-medium-size); line-height: var(--display-medium-lh); letter-spacing: -0.25px; }
+.brand-display-small  { font-family: var(--font-brand); font-weight: 700; font-size: var(--display-small-size);  line-height: var(--display-small-lh); }
+
+/* ---- Headline (brand serif) ---- */
+.brand-headline-large    { font-family: var(--font-brand); font-weight: 600; font-size: var(--headline-large-size);  line-height: var(--headline-large-lh); }
+.brand-headline-medium   { font-family: var(--font-brand); font-weight: 600; font-size: var(--headline-medium-size); line-height: var(--headline-medium-lh); }
+.brand-headline-semibold,
+.brand-headline-small    { font-family: var(--font-brand); font-weight: 600; font-size: var(--headline-small-size);  line-height: var(--headline-small-lh); }
+
+/* ---- Title (plain, semibold) ---- */
+.plain-title-large  { font-family: var(--font-plain); font-weight: 600; font-size: var(--title-large-size);  line-height: var(--title-large-lh); }
+.plain-title-medium { font-family: var(--font-plain); font-weight: 600; font-size: var(--title-medium-size); line-height: var(--title-medium-lh); }
+.plain-title-small  { font-family: var(--font-plain); font-weight: 600; font-size: var(--title-small-size);  line-height: var(--title-small-lh); }
+
+/* ---- Body (plain, regular) ---- */
+.plain-body-large  { font-family: var(--font-plain); font-weight: 400; font-size: var(--body-large-size);  line-height: var(--body-large-lh); }
+.plain-body-medium,
+.plain-body-regular { font-family: var(--font-plain); font-weight: 400; font-size: var(--body-medium-size); line-height: var(--body-medium-lh); }
+.plain-body-small  { font-family: var(--font-plain); font-weight: 400; font-size: var(--body-small-size);  line-height: var(--body-small-lh); }
+
+/* ---- Label (plain, medium) ---- */
+.plain-label-large  { font-family: var(--font-plain); font-weight: 500; font-size: var(--label-large-size);  line-height: var(--label-large-lh); letter-spacing: 0.1px; }
+.plain-label-medium { font-family: var(--font-plain); font-weight: 500; font-size: var(--label-medium-size); line-height: var(--label-medium-lh); letter-spacing: 0.5px; }
+.plain-label-small  { font-family: var(--font-plain); font-weight: 500; font-size: var(--label-small-size);  line-height: var(--label-small-lh); letter-spacing: 0.5px; }

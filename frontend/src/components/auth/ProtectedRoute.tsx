@@ -5,7 +5,7 @@ export default function ProtectedRoute() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="empty-state">Carregando...</div>;
+    return <div className="page-subtitle" style={{ padding: 48, textAlign: "center" }}>Carregando...</div>;
   }
 
   if (!user) {
