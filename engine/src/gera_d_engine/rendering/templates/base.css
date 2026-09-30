@@ -1,0 +1,211 @@
+/* Identidade visual validada (seção 24): estrutura limpa, títulos em negrito, faróis e cores
+   consistentes, paginação e rodapé com "Documento confidencial." — não redesenhar a cada execução. */
+
+:root {
+    --gera-d-dark: #1b2a3a;
+    --gera-d-text: #2b2b2b;
+    --gera-d-muted: #5a6472;
+    --gera-d-border: #d9dde2;
+    --band-excelente: #2e7d32;
+    --band-atencao: #b8960c;
+    --band-desenvolvimento-prioritario: #c46a1f;
+    --band-desenvolvimento-critico: #b93a2f;
+}
+
+@page {
+    size: A4;
+    margin: 2.2cm 1.8cm 2.4cm 1.8cm;
+
+    @bottom-left {
+        content: "Gera D Consultoria | Especificação 93x7®";
+        font-size: 8pt;
+        color: var(--gera-d-muted);
+    }
+    @bottom-center {
+        content: "Documento confidencial.";
+        font-size: 8pt;
+        color: var(--gera-d-muted);
+    }
+    @bottom-right {
+        content: "Página " counter(page);
+        font-size: 8pt;
+        color: var(--gera-d-muted);
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: var(--gera-d-text);
+    font-size: 10.5pt;
+    line-height: 1.45;
+}
+
+.brand-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 2px solid var(--gera-d-dark);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+}
+
+.brand-header .brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--gera-d-dark);
+    font-size: 9pt;
+    text-transform: uppercase;
+}
+
+.brand-header .report-kind {
+    font-size: 9pt;
+    color: var(--gera-d-muted);
+}
+
+h1 {
+    font-size: 18pt;
+    color: var(--gera-d-dark);
+    margin: 10px 0 14px 0;
+}
+
+h2 {
+    font-size: 13pt;
+    color: var(--gera-d-dark);
+    margin: 20px 0 8px 0;
+    border-bottom: 1px solid var(--gera-d-border);
+    padding-bottom: 3px;
+}
+
+h3 {
+    font-size: 11pt;
+    color: var(--gera-d-dark);
+    margin: 14px 0 4px 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+
+table.meta-table td {
+    border: 1px solid var(--gera-d-border);
+    padding: 6px 8px;
+    font-size: 9.5pt;
+    vertical-align: top;
+}
+
+table.meta-table td.label {
+    font-weight: 700;
+    color: var(--gera-d-muted);
+    font-size: 8pt;
+    text-transform: uppercase;
+    background: #f5f6f8;
+}
+
+table.dashboard {
+    font-size: 9.5pt;
+}
+
+table.dashboard th {
+    text-align: left;
+    background: var(--gera-d-dark);
+    color: white;
+    padding: 6px 8px;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+}
+
+table.dashboard td {
+    border-bottom: 1px solid var(--gera-d-border);
+    padding: 6px 8px;
+    vertical-align: top;
+}
+
+.farol {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.farol.excelente { background: var(--band-excelente); }
+.farol.atencao { background: var(--band-atencao); }
+.farol.desenvolvimento_prioritario { background: var(--band-desenvolvimento-prioritario); }
+.farol.desenvolvimento_critico { background: var(--band-desenvolvimento-critico); }
+
+.score-line {
+    font-weight: 700;
+}
+
+.score-line.excelente { color: var(--band-excelente); }
+.score-line.atencao { color: var(--band-atencao); }
+.score-line.desenvolvimento_prioritario { color: var(--band-desenvolvimento-prioritario); }
+.score-line.desenvolvimento_critico { color: var(--band-desenvolvimento-critico); }
+
+.criterion-block {
+    margin-bottom: 10px;
+}
+
+.box {
+    border: 1px solid var(--gera-d-border);
+    border-left: 4px solid var(--gera-d-dark);
+    background: #f9fafb;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+}
+
+.box.potencial-medio { border-left-color: var(--band-atencao); }
+.box.potencial-alto { border-left-color: var(--band-excelente); }
+.box.potencial-baixo { border-left-color: var(--band-desenvolvimento-critico); }
+.box.riscos { border-left-color: var(--band-desenvolvimento-critico); }
+.box.oportunidades { border-left-color: var(--gera-d-dark); }
+.box.recomendacao { border-left-color: var(--gera-d-dark); background: #eef2f6; }
+.box.treinamento { border-left-color: var(--band-atencao); background: #fbf7ea; }
+
+.box .box-title {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 8.5pt;
+    color: var(--gera-d-muted);
+    margin-bottom: 4px;
+}
+
+ul.tight {
+    margin: 4px 0;
+    padding-left: 16px;
+}
+
+ul.tight li {
+    margin-bottom: 3px;
+}
+
+.evidence {
+    font-size: 9pt;
+    color: var(--gera-d-muted);
+    border-left: 2px solid var(--gera-d-border);
+    padding-left: 8px;
+    margin: 4px 0 8px 0;
+}
+
+.evidence .basis-tag {
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--gera-d-muted);
+}
+
+.final-evaluation {
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 2px solid var(--gera-d-dark);
+}
+
+.classification-tag {
+    font-weight: 700;
+}

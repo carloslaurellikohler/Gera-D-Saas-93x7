@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Visão Detalhada da Monitoria 93x7® — {{ r.cs_name }}</title>
+    <style>{{ base_css|safe }}</style>
+</head>
+<body>
+    <div class="brand-header">
+        <span class="brand">Gera D Consultoria</span>
+        <span class="report-kind">Visão Detalhada | Metodologia 93x7® | {{ r.calibration_version }}</span>
+    </div>
+
+    <h1>VISÃO DETALHADA DA MONITORIA 93x7®</h1>
+
+    <table class="meta-table">
+        <tr>
+            <td class="label" width="25%">Profissional avaliado</td>
+            <td class="label" width="25%">Personal Banker</td>
+            <td class="label" width="25%">Tipo de contato</td>
+            <td class="label" width="25%">Data</td>
+        </tr>
+        <tr>
+            <td>{{ r.cs_name }}</td>
+            <td>{{ r.pb_name }}</td>
+            <td>{{ r.interaction_type }}</td>
+            <td>{{ r.interaction_date }}</td>
+        </tr>
+        <tr>
+            <td class="label">Duração</td>
+            <td class="label">Performance geral</td>
+            <td class="label" colspan="2">Classificação</td>
+        </tr>
+        <tr>
+            <td>{{ r.duration }}</td>
+            <td>
+                <span class="farol {{ overall.band_key }}"></span>
+                <span class="score-line {{ overall.band_key }}">{{ overall.score }}</span>
+                <span style="color:var(--gera-d-muted); font-size:8pt;"> (média simples de referência: {{ computed_average }})</span>
+            </td>
+            <td colspan="2"><span class="classification-tag">{{ r.overall_classification_text }}</span></td>
+        </tr>
+    </table>
+
+    <h2>1. Leitura Geral da Condução</h2>
+    <p>{{ r.general_reading }}</p>
+
+    <h2>2. Dashboard de Performance</h2>
+    <table class="dashboard">
+        <tr>
+            <th>Critério</th>
+            <th>Status</th>
+            <th>Nota</th>
+            <th>Leitura</th>
+        </tr>
+        {% for c in criteria %}
+        <tr>
+            <td>{{ c.label }}</td>
+            <td><span class="farol {{ c.band_key }}"></span>{{ c.band_label }}</td>
+            <td><span class="score-line {{ c.band_key }}">{{ c.score }}</span></td>
+            <td>{{ c.reading }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h2>3. Análise dos Critérios</h2>
+    {% for c in criteria %}
+    <div class="criterion-block">
+        <h3><span class="farol {{ c.band_key }}"></span><span class="score-line {{ c.band_key }}">{{ c.score }} | {{ c.label|upper }}</span></h3>
+        <p>{{ c.analysis }}</p>
+        {% for e in c.evidences %}
+        <div class="evidence">
+            <span class="basis-tag">{{ e.basis }}</span> — <strong>{{ e.finding }}</strong><br>
+            "{{ e.evidence }}"<br>
+            <em>Resposta do CS:</em> {{ e.response_behavior }} · <em>Impacto:</em> {{ e.impact }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <h2>4. Pilar 93 e Pilar 7</h2>
+    <p><span class="farol {{ pilar_93.band_key }}"></span><span class="score-line {{ pilar_93.band_key }}">{{ pilar_93.score }} | PERFORMANCE {{ pilar_93.label|upper }}</span><br>{{ pilar_93.analysis }}</p>
+    <p><span class="farol {{ pilar_7.band_key }}"></span><span class="score-line {{ pilar_7.band_key }}">{{ pilar_7.score }} | PERFORMANCE {{ pilar_7.label|upper }}</span><br>{{ pilar_7.analysis }}</p>
+
+    <h2>5. Contexto do PB</h2>
+    <p><strong>Sinais de senioridade:</strong> {{ r.pb_context.seniority_signals|join("; ") }}</p>
+    <p><strong>Sinais comerciais:</strong> {{ r.pb_context.commercial_signals|join("; ") }}</p>
+    <p><strong>Necessidades e oportunidades:</strong> {{ r.pb_context.needs_and_opportunities|join("; ") }}</p>
+    {% if r.pb_context.availability_notes %}
+    <p><strong>Disponibilidade:</strong> {{ r.pb_context.availability_notes }}</p>
+    {% endif %}
+    <p><em>{{ r.pb_context.basis_notes }}</em></p>
+
+    <h2>6. Análise de Consequência</h2>
+    <p>{{ r.consequence_analysis.narrative }}</p>
+    <p><strong>O que a condução produziu:</strong></p>
+    <ul class="tight">{% for item in r.consequence_analysis.what_was_produced %}<li>{{ item }}</li>{% endfor %}</ul>
+    <p><strong>O que a condução deixou de produzir:</strong></p>
+    <ul class="tight">{% for item in r.consequence_analysis.what_was_missed %}<li>{{ item }}</li>{% endfor %}</ul>
+
+    <div class="box potencial-{{ result_potential_key }}">
+        <div class="box-title">{{ r.result_potential.level }} | Potencial de geração de resultado para a PB</div>
+        <p>{{ r.result_potential.justification }}</p>
+    </div>
+
+    <div class="box potencial-{{ pb_potential_key }}">
+        <div class="box-title">{{ r.pb_commercial_potential.level }} | Potencial comercial da Personal Banker</div>
+        <p>{{ r.pb_commercial_potential.justification }}</p>
+        {% if r.pb_commercial_potential.limitations %}
+        <p><em>Limitação de dados: {{ r.pb_commercial_potential.limitations }}</em></p>
+        {% endif %}
+    </div>
+
+    <h2>7. Sinais Aproveitáveis e Pontos Preservados</h2>
+    <ul class="tight">
+        {% for item in r.strengths %}
+        <li><strong>{{ item.title }}</strong> — {{ item.description }}</li>
+        {% endfor %}
+    </ul>
+
+    <h2>8. Perguntas Sugeridas</h2>
+    <ul class="tight">
+        {% for q in r.suggested_questions %}
+        <li>{{ q.question }} <em>({{ q.rationale }})</em></li>
+        {% endfor %}
+    </ul>
+
+    <div class="box riscos">
+        <div class="box-title">Principais riscos</div>
+        <ul class="tight">
+            {% for item in r.risks %}
+            <li>{{ item.title }} — {{ item.description }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="box oportunidades">
+        <div class="box-title">Principais oportunidades perdidas</div>
+        <ul class="tight">
+            {% for item in r.missed_opportunities %}
+            <li>{{ item.title }} — {{ item.description }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="box recomendacao">
+        <div class="box-title">Direcionamento | Recomendação executiva</div>
+        <p>{{ r.executive_recommendation }}</p>
+    </div>
+
+    <div class="box treinamento">
+        <div class="box-title">Treinamento específico | Nota para T&amp;D</div>
+        <p><strong>Competência a desenvolver:</strong> {{ r.training_recommendation.competency_to_develop }}</p>
+        <p><strong>Comportamento observado:</strong> {{ r.training_recommendation.observed_behavior }}</p>
+        <p><strong>Comportamento esperado:</strong> {{ r.training_recommendation.expected_behavior }}</p>
+        <p><strong>Preservar:</strong> {{ r.training_recommendation.competencies_to_preserve|join(", ") }}</p>
+    </div>
+
+    <div class="final-evaluation">
+        <span class="farol {{ overall.band_key }}"></span>
+        <span class="score-line {{ overall.band_key }}">{{ overall.score }} | AVALIAÇÃO FINAL</span>
+        <p>{{ r.final_evaluation }}</p>
+        <p><strong>Classificação final:</strong> {{ r.overall_classification_text }}</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,216 @@
+# Calibragem da metodologia 93x7® — fonte de verdade: docs/metodologia_93x7.pdf
+#
+# Recalibrar = editar este arquivo e subir `calibration_version`. Nunca reescrever a lógica de
+# orquestração do pipeline para mudar critérios/textos. Resultados gerados sob versões diferentes
+# nunca devem ser tratados como equivalentes (seção 26 da especificação).
+
+calibration_version: "93x7 Franq | Calibration v1.0"
+methodology_name: "93x7®"
+project: "Projeto Franq"
+
+objective: >
+  Avaliar a qualidade da assessoria prestada pelo CS a um PB, interpretando a conversa como
+  interação humana e comercial — não como checklist de script ou auditoria de compliance.
+  Avaliar como o CS conduziu a conversa, o impacto provável dessa condução sobre o PB e o quanto
+  a assessoria contribuiu para aproximar o PB de uma ação capaz de gerar resultado.
+
+unit_of_analysis: >
+  Qualidade da condução dentro do contexto específico daquela conversa.
+
+product_principle: >
+  O motor não deve avaliar se o CS cumpriu um roteiro. Deve avaliar se o CS leu corretamente a
+  pessoa e o contexto à sua frente e utilizou comportamento, perguntas, conhecimento e
+  direcionamento para produzir o melhor próximo movimento possível.
+
+pillars:
+  pilar_93:
+    label: "Pilar 93"
+    description: >
+      Avalia predominantemente os elementos comportamentais da interação: presença, segurança,
+      conexão, escuta, adaptação, confiança gerada, postura, leitura do interlocutor e condução
+      relacional.
+  pilar_7:
+    label: "Pilar 7"
+    description: >
+      Avalia predominantemente o conteúdo utilizado: qualidade e pertinência das informações,
+      clareza das orientações, seleção do conteúdo, profundidade técnica, objetividade e uso do
+      conhecimento para produzir direcionamento.
+  rule: >
+    93 e 7 são dimensões conceituais, não uma fórmula. NÃO calcular nota = comportamento * 0,93 +
+    conteúdo * 0,07. As notas de Pilar 93 e Pilar 7 são julgamento holístico calibrado, resultado
+    da avaliação integrada dos critérios.
+
+object_evaluated: >
+  O profissional de CS da Franq durante uma interação específica com um PB. O PB fornece contexto
+  indispensável para avaliar adequação, personalização e impacto da condução, mas NÃO recebe nota
+  93x7®.
+
+contextual_analysis_principle: >
+  A análise precisa ser contextual, não literal. Não procurar apenas palavras, frases ou perguntas
+  obrigatórias. Para cada informação relevante, buscar o encadeamento: o que o PB respondeu → que
+  informação relevante surgiu → o CS percebeu → aprofundou → adaptou a conversa → direcionou →
+  gerou consequência prática.
+
+seniority_and_adaptation: >
+  O mesmo onboarding não deve ser avaliado da mesma forma para todos os PBs. Inferir experiência,
+  repertório, autonomia, conhecimento financeiro, carteira, complexidade das oportunidades e
+  sinais de senioridade — depois avaliar se a condução foi adaptada a esse perfil.
+
+criteria:
+  posicionamento:
+    label: "Posicionamento"
+    description: >
+      Avalia como o CS ocupa seu papel na interação. Observar segurança, clareza, domínio,
+      autoridade sem arrogância, transparência sobre limites, capacidade de orientar, legitimidade
+      e responsabilidade pela condução.
+    good_performance: >
+      Transmite segurança, conhece seu papel, orienta e sabe quando envolver especialistas.
+    risks: >
+      Excesso de explicação para demonstrar conhecimento, insegurança, postura excessivamente
+      operacional ou transferência de responsabilidade.
+  conexao:
+    label: "Conexão"
+    description: >
+      Avalia acolhimento, abertura, confiança, proximidade adequada, interesse genuíno, escuta,
+      validação e ambiente favorável para o PB compartilhar informações.
+    calibration_note: >
+      Conexão é meio, não fim. Uma conversa agradável pode ter boa Conexão e continuar fraca em
+      Sondagem ou Direcionamento.
+  sondagem:
+    label: "Sondagem"
+    description: >
+      Avaliar qualidade, profundidade e consequência das perguntas, não simplesmente sua
+      quantidade. Quando pertinente, investigar perfil, experiência, carteira, rede, clientes,
+      oportunidades, aderência de produtos, valores, urgência, maturidade, decisores, garantias,
+      restrições, disponibilidade, metas e prioridades.
+    critical_rule: >
+      Quando o PB espontaneamente oferece uma informação relevante, verificar se o CS aproveitou o
+      sinal. Validar a informação e retornar ao roteiro NÃO representa aprofundamento suficiente.
+  direcionamento:
+    label: "Direcionamento"
+    description: >
+      Avalia se o CS transforma o diagnóstico em orientação pertinente. Observar personalização,
+      relevância, priorização, seleção de produtos e recursos, articulação com especialistas e
+      clareza do caminho recomendado.
+    calibration_note: >
+      Mais conteúdo não significa melhor Direcionamento. Relevância deve prevalecer sobre volume
+      de informação.
+  encaminhamento:
+    label: "Encaminhamento"
+    description: >
+      Avalia o que acontece depois da conversa. Disponibilidade genérica NÃO equivale a
+      encaminhamento. Procurar ação definida, responsável, prazo, próxima reunião, cadastro,
+      especialista, documento, proposta ou acompanhamento.
+    desired_structure: "Prioridade → Ação → Responsável → Prazo → Acompanhamento"
+  eficiencia_conducao:
+    label: "Eficiência da Condução"
+    description: >
+      Não significa simplesmente duração da chamada. Avaliar se o tempo utilizado produziu valor
+      proporcional. Observar repetição, excesso de fala, conteúdo desnecessário, digressões, baixa
+      participação do PB, pouca adaptação e demora para chegar às questões economicamente
+      relevantes.
+    cross_impact: >
+      Excesso de fala ou explicação pode afetar Eficiência e, dependendo da consequência, também
+      Sondagem e Direcionamento.
+
+score_bands:
+  - min: 8.0
+    max: 10.0
+    key: "excelente"
+    label: "Excelente desempenho"
+    color: "verde"
+  - min: 7.0
+    max: 7.9
+    key: "atencao"
+    label: "Atenção"
+    color: "amarelo"
+  - min: 6.0
+    max: 6.9
+    key: "desenvolvimento_prioritario"
+    label: "Desenvolvimento prioritário"
+    color: "laranja"
+  - min: -999
+    max: 5.9
+    key: "desenvolvimento_critico"
+    label: "Desenvolvimento crítico"
+    color: "vermelho"
+
+score_format: "● {nota} | {criterio}"
+
+final_score_rule: >
+  Não utilizar média cega como decisão final. A média pode ser referência interna, mas a
+  interpretação precisa considerar a consequência da condução. Notas altas em Posicionamento e
+  Conexão não devem mascarar Sondagem, Direcionamento ou Encaminhamento frágeis quando a conversa
+  não produz avanço.
+
+result_potential:
+  description: >
+    Leitura qualitativa sobre quanto a interação provavelmente contribuiu para o PB gerar
+    resultado. NÃO é previsão de receita. Avaliar geração de clareza, redução de fricção,
+    identificação de oportunidades, prontidão, conexão de recursos, execução e acompanhamento.
+  levels: ["Baixo", "Médio", "Médio-alto", "Alto"]
+  rule: "Sempre acompanhada de justificativa."
+
+pb_commercial_potential:
+  description: >
+    Identificar separadamente sinais como carteira, rede, senioridade, relacionamentos
+    empresariais, oportunidades mencionadas, acesso a decisores, experiência financeira,
+    capacidade de originação e intenção de atuação.
+  levels: ["Baixo", "Médio", "Alto"]
+  warning: >
+    Não inventar potencial. Se a interação não permite quantificar carteira ou oportunidades,
+    registrar a limitação como informação insuficiente.
+
+evidence_basis:
+  evidencia: "Informação explicitamente presente na interação."
+  inferencia_razoavel: "Conclusão sustentada por múltiplos sinais."
+  informacao_insuficiente: "A transcrição não sustenta conclusão."
+  rule: "A solução nunca deve preencher lacunas com suposição."
+
+evidence_structure: "criterion → finding → evidence → response_behavior → impact"
+
+development_taxonomy:
+  pontos_preservados: "Competências já fortes que não devem ser perdidas."
+  riscos: "Consequências possíveis da forma atual de atuação."
+  oportunidades_perdidas: "Possibilidades concretas observadas na interação que poderiam ter gerado mais valor."
+
+suggested_questions_rule: >
+  O relatório não deve apenas indicar que faltou aprofundamento — deve converter o diagnóstico em
+  desenvolvimento prático, com perguntas geradas de forma contextual (não como script fixo).
+suggested_questions_examples:
+  - "Quais oportunidades estão mais maduras hoje?"
+  - "Qual poderia avançar nos próximos 30 dias?"
+  - "Qual o valor estimado?"
+  - "Quem participa da decisão?"
+  - "Existe proposta concorrente?"
+  - "Que garantia está disponível?"
+  - "O que impede o avanço?"
+  - "Qual operação deve ser priorizada primeiro?"
+
+executive_recommendation_rule: >
+  Responder qual mudança de comportamento provavelmente produziria maior impacto. Evitar
+  recomendações genéricas. A recomendação deve ser específica, contextual e operacional.
+
+training_notes_rule: >
+  Gerar síntese para T&D: competência a desenvolver, comportamento observado, comportamento
+  esperado e competências a preservar.
+
+individual_development_not_ranking: >
+  A ferramenta não deve criar competição ou ranking entre CSs. Evitar "melhor profissional",
+  "pior desempenho", "primeiro colocado", "segunda maior nota" ou equivalentes. Comparação
+  correta: CS × régua 93x7® e, com histórico, CS atual × histórico do próprio CS.
+
+forbidden_behaviors:
+  - "Avaliar apenas palavras-chave."
+  - "Dar nota alta porque houve muitas perguntas."
+  - "Confundir quantidade de conteúdo com qualidade."
+  - "Penalizar duração isoladamente."
+  - "Inventar informações sobre o PB."
+  - "Transformar inferência em fato."
+  - "Usar a mesma expectativa para todos os PBs."
+  - "Considerar disponibilidade genérica como encaminhamento concreto."
+  - "Gerar perguntas genéricas e repetitivas."
+  - "Criar ranking entre CSs."
+  - "Recalcular notas antigas silenciosamente após mudança da régua."
+  - "Misturar outras metodologias nesta versão."
+  - "Produzir recomendações desconectadas das evidências."
