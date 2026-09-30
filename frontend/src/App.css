@@ -774,6 +774,8 @@ h3 {
 }
 
 .login-hero {
+  position: relative;
+  overflow: hidden;
   width: 44%;
   min-width: 420px;
   background: var(--gerad-navy);
@@ -783,6 +785,26 @@ h3 {
   flex-direction: column;
   justify-content: space-between;
   gap: 40px;
+}
+
+.login-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.login-hero-decoration {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.login-hero-decoration circle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
 }
 
 .login-hero-eyebrow {
@@ -854,6 +876,11 @@ h3 {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.login-hero-step:not(:first-child) {
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  padding-left: 10px;
 }
 
 .login-panel {

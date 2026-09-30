@@ -35,6 +35,17 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-hero">
+        <svg
+          className="login-hero-decoration"
+          viewBox="0 0 500 500"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="340" cy="60" r="70" />
+          <circle cx="340" cy="60" r="130" />
+          <circle cx="340" cy="60" r="190" />
+          <circle cx="340" cy="60" r="250" />
+        </svg>
         <div>
           <span className="login-hero-eyebrow">Metodologia 93x7®</span>
           <div className="login-hero-title">
