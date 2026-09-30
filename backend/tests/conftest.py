@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models import analysis as _analysis_models  # noqa: F401 — registra o modelo em Base.metadata
+from app.models import user as _user_models  # noqa: F401 — registra o modelo em Base.metadata
 
 TEST_DB_NAME = "gerad_test"
 

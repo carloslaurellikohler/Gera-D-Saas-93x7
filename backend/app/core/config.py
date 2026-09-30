@@ -26,6 +26,19 @@ class Settings(BaseSettings):
 
     API_V1_PREFIX: str = "/api/v1"
 
+    # --- Autenticação ---
+    JWT_SECRET_KEY: str = "dev-secret-change-me"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8
+
+    COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
+
+    # Bootstrap do primeiro usuário ADMIN (ver backend/scripts/seed_admin.py)
+    SEED_ADMIN_EMAIL: str | None = None
+    SEED_ADMIN_PASSWORD: str | None = None
+    SEED_ADMIN_NAME: str = "Administrador"
+
 
 def get_settings() -> Settings:
     return Settings()
