@@ -9,6 +9,15 @@ dist/
 # Saídas locais do motor (relatórios gerados, dados de interações)
 engine/output/
 
+# Backend SaaS
+backend/storage_data/
+backend/.pytest_cache/
+backend/*.egg-info/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # Segredos
 .env
 *.env.local

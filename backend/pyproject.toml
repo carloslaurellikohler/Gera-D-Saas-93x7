@@ -1,0 +1,39 @@
+[project]
+name = "gerad-backend"
+version = "0.1.0"
+description = "Backend SaaS do GerAD — API, orquestração e persistência ao redor do motor gera_d_engine"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.13.0",
+    "pydantic-settings>=2.6.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "psycopg[binary]>=3.2.3",
+    "celery>=5.4.0",
+    "redis>=5.2.0",
+    "python-multipart>=0.0.17",
+    "python-dotenv>=1.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.14.0",
+    "httpx>=0.27.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: chama a API da OpenAI de verdade (custo real) — excluído por padrão via addopts, rodar explicitamente com pytest -m slow",
+]

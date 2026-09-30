@@ -1,0 +1,76 @@
+"""Modelo de domínio da análise. Mapeia para/de gera_d_engine apenas na fronteira de
+engine_integration/mappers.py — este módulo nunca importa gera_d_engine."""
+
+from __future__ import annotations
+
+import enum
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import Date, DateTime, Enum, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class AnalysisStatus(str, enum.Enum):
+    CREATED = "CREATED"
+    UPLOADED = "UPLOADED"
+    TRANSCRIBING = "TRANSCRIBING"
+    TRANSCRIBED = "TRANSCRIBED"
+    ANALYZING = "ANALYZING"
+    GENERATING_REPORTS = "GENERATING_REPORTS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class Analysis(Base):
+    __tablename__ = "analyses"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    # Metadados fornecidos pelo usuário na criação
+    participant_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    objective: Mapped[str] = mapped_column(String(64), nullable=False)
+    objective_complement: Mapped[str | None] = mapped_column(String(500))
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    interaction_date: Mapped[date | None] = mapped_column(Date)
+
+    # Arquivo de entrada
+    input_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    file_name: Mapped[str | None] = mapped_column(String(255))
+    file_path: Mapped[str | None] = mapped_column(String(500))
+
+    # Estado do pipeline
+    status: Mapped[AnalysisStatus] = mapped_column(
+        Enum(AnalysisStatus, name="analysis_status", native_enum=False, length=32),
+        nullable=False,
+        default=AnalysisStatus.CREATED,
+        index=True,
+    )
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    # Identidade da interação para a engine (ver mappers.build_input_metadata)
+    cs_id: Mapped[str | None] = mapped_column(String(64))
+    cs_name: Mapped[str | None] = mapped_column(String(255))
+    pb_id: Mapped[str | None] = mapped_column(String(64))
+    interaction_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+
+    # Resultados produzidos pela engine
+    transcription: Mapped[dict | None] = mapped_column(JSONB)
+    analysis_result: Mapped[dict | None] = mapped_column(JSONB)
+    executive_report_path: Mapped[str | None] = mapped_column(String(500))
+    detailed_report_path: Mapped[str | None] = mapped_column(String(500))
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now()
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

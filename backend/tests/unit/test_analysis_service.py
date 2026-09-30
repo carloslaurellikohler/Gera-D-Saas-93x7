@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+from gera_d_engine.schemas.transcript import Transcript, TranscriptTurn
+
+from app.core.config import Settings
+from app.models.analysis import AnalysisStatus
+from app.repositories.analysis_repository import AnalysisRepository
+from app.services.analysis_service import AnalysisService
+from app.storage.local_storage import LocalDiskStorage
+
+
+@pytest.fixture()
+def settings() -> Settings:
+    return Settings(DEFAULT_CS_ID="cs-1", DEFAULT_CS_NAME="Consultor Teste", MAX_UPLOAD_MB=100)
+
+
+@pytest.fixture()
+def storage(tmp_path: Path) -> LocalDiskStorage:
+    return LocalDiskStorage(tmp_path / "storage")
+
+
+@pytest.fixture()
+def service(db_session, storage, settings) -> AnalysisService:
+    repo = AnalysisRepository(db_session)
+    engine = MagicMock()
+    return AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
+
+
+def _create_uploaded_analysis(service: AnalysisService, storage: LocalDiskStorage):
+    analysis = service.create_and_store(
+        participant_name="João Silva",
+        objective="Onboarding",
+        objective_complement=None,
+        duration_minutes=45,
+        interaction_date=None,
+        file_name="transcricao.txt",
+        file_content=b"CS: Oi\nPB: Oi",
+    )
+    return analysis
+
+
+def _fake_transcript() -> Transcript:
+    return Transcript(
+        turns=[TranscriptTurn(speaker="CS", text="Oi"), TranscriptTurn(speaker="PB", text="Oi")],
+        is_diarized=True,
+        source_kind="texto_transcrito",
+    )
+
+
+def _fake_result(tmp_path: Path):
+    result = MagicMock()
+    result.model_dump.return_value = {"overall_score": 8.5, "pb_name": "João Silva"}
+
+    def export_reports(_result, out_dir: Path):
+        exec_path = Path(out_dir) / "executivo.pdf"
+        det_path = Path(out_dir) / "detalhado.pdf"
+        exec_path.write_bytes(b"%PDF-1.4 executivo")
+        det_path.write_bytes(b"%PDF-1.4 detalhado")
+        return exec_path, det_path
+
+    return result, export_reports
+
+
+def test_create_and_store_uploads_file_and_sets_status(service: AnalysisService, storage):
+    analysis = _create_uploaded_analysis(service, storage)
+
+    assert analysis.status == AnalysisStatus.UPLOADED
+    assert analysis.input_type == "txt"
+    assert analysis.file_path is not None
+    assert storage.read(analysis.file_path) == b"CS: Oi\nPB: Oi"
+    assert analysis.cs_id == "cs-1"
+    assert analysis.cs_name == "Consultor Teste"
+    assert analysis.duration_seconds == 45 * 60
+
+
+def test_create_and_store_accepts_real_mp3_signature(service: AnalysisService, storage):
+    # Cabeçalho ID3v2 real (gerado com ffmpeg) — prova que validate_upload aceita áudio de
+    # verdade, não só a extensão declarada (ver services/validation.py).
+    mp3_content = b"ID3\x04\x00\x00\x00\x00\x00\x23" + b"\x00" * 100
+    analysis = service.create_and_store(
+        participant_name="Carlos",
+        objective="Reunião comercial",
+        objective_complement=None,
+        duration_minutes=None,
+        interaction_date=None,
+        file_name="chamada.mp3",
+        file_content=mp3_content,
+    )
+
+    assert analysis.status == AnalysisStatus.UPLOADED
+    assert analysis.input_type == "mp3"
+    assert storage.read(analysis.file_path) == mp3_content
+
+
+def test_run_analysis_job_happy_path_reaches_completed(service: AnalysisService, storage, tmp_path):
+    analysis = _create_uploaded_analysis(service, storage)
+
+    transcript = _fake_transcript()
+    result, export_reports_fn = _fake_result(tmp_path)
+    service.engine.load_transcript.return_value = transcript
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id)
+
+    final = service.repo.get(analysis.id)
+    assert final.status == AnalysisStatus.COMPLETED
+    assert final.transcription is not None
+    assert final.analysis_result == {"overall_score": 8.5, "pb_name": "João Silva"}
+    assert final.executive_report_path is not None
+    assert final.detailed_report_path is not None
+    assert storage.read(final.executive_report_path) == b"%PDF-1.4 executivo"
+    assert final.completed_at is not None
+    assert final.error_message is None
+
+    service.engine.run_pipeline.assert_called_once()
+    called_metadata = service.engine.run_pipeline.call_args.args[1]
+    assert called_metadata.cs_id == "cs-1"
+    assert called_metadata.pb_name == "João Silva"
+
+
+def test_run_analysis_job_records_status_sequence(service: AnalysisService, storage, tmp_path):
+    analysis = _create_uploaded_analysis(service, storage)
+    observed_statuses: list[AnalysisStatus] = []
+
+    original_update_status = service.repo.update_status
+
+    def tracking_update_status(analysis_id, status, **extra):
+        observed_statuses.append(status)
+        return original_update_status(analysis_id, status, **extra)
+
+    service.repo.update_status = tracking_update_status  # type: ignore[method-assign]
+
+    transcript = _fake_transcript()
+    result, export_reports_fn = _fake_result(tmp_path)
+    service.engine.load_transcript.return_value = transcript
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id)
+
+    assert observed_statuses == [
+        AnalysisStatus.TRANSCRIBING,
+        AnalysisStatus.ANALYZING,
+        AnalysisStatus.GENERATING_REPORTS,
+    ]
+
+
+def test_run_analysis_job_transcription_failure_sets_failed_with_safe_message(
+    service: AnalysisService, storage
+):
+    analysis = _create_uploaded_analysis(service, storage)
+    service.engine.load_transcript.side_effect = RuntimeError(
+        "segredo interno: chave de API invalida xyz123"
+    )
+
+    with pytest.raises(RuntimeError):
+        service.run_analysis_job(analysis.id)
+
+    final = service.repo.get(analysis.id)
+    assert final.status == AnalysisStatus.FAILED
+    assert final.error_message == "Falha ao transcrever/ingerir o arquivo enviado."
+    assert "xyz123" not in final.error_message
+    assert final.completed_at is not None
+
+
+def test_run_analysis_job_pipeline_failure_sets_failed_with_safe_message(
+    service: AnalysisService, storage
+):
+    analysis = _create_uploaded_analysis(service, storage)
+    service.engine.load_transcript.return_value = _fake_transcript()
+    service.engine.run_pipeline.side_effect = RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        service.run_analysis_job(analysis.id)
+
+    final = service.repo.get(analysis.id)
+    assert final.status == AnalysisStatus.FAILED
+    assert final.error_message == "Falha ao gerar a análise da conversa."
+    # transcrição já persistida antes da falha do pipeline
+    assert final.transcription is not None
+
+
+def test_run_analysis_job_reports_failure_sets_failed_with_safe_message(
+    service: AnalysisService, storage
+):
+    analysis = _create_uploaded_analysis(service, storage)
+    service.engine.load_transcript.return_value = _fake_transcript()
+    result = MagicMock()
+    result.model_dump.return_value = {"overall_score": 5.0}
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = RuntimeError("weasyprint explodiu")
+
+    with pytest.raises(RuntimeError):
+        service.run_analysis_job(analysis.id)
+
+    final = service.repo.get(analysis.id)
+    assert final.status == AnalysisStatus.FAILED
+    assert final.error_message == "Falha ao gerar os relatórios."
+    assert final.analysis_result is not None
