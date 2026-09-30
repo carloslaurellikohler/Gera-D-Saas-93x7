@@ -13,9 +13,11 @@ from app.db.session import get_db
 from app.engine_integration.adapter import EngineAdapter
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
 from app.services.auth_service import AuthService
+from app.services.dashboard_service import DashboardService
 from app.storage.local_storage import LocalDiskStorage
 
 
@@ -34,6 +36,10 @@ def get_auth_service(
     db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
 ) -> AuthService:
     return AuthService(repo=UserRepository(db), settings=settings)
+
+
+def get_dashboard_service(db: Session = Depends(get_db)) -> DashboardService:
+    return DashboardService(repo=DashboardRepository(db))
 
 
 def get_current_user(

@@ -60,8 +60,24 @@ não são aceitos — limitação da engine, comunicada como erro 4xx claro, nun
   (`role`: ADMIN/USER, `status`: ACTIVE/INACTIVE), rotas `/auth/login`, `/auth/logout`,
   `/auth/me`, shell autenticado (sidebar + menu de usuário), `ProtectedRoute` no frontend,
   script `backend/scripts/seed_admin.py` para bootstrap do primeiro admin. Sem
-  autocadastro público. **As rotas `/analyses/*` permanecem abertas nesta fase** — o
-  vínculo `Analysis ↔ User` fica para a Fase 3.
+  autocadastro público.
+- **Fase 3 — Integração de `Analysis` com usuários autenticados** — `user_id` (FK
+  nullable para `users`, `ondelete=SET NULL`) em `analyses`; `AnalysisService` usa o
+  usuário autenticado (`current_user.id`/`.name`) em vez de
+  `DEFAULT_CS_ID`/`DEFAULT_CS_NAME` na criação; rotas `/analyses/*` agora exigem
+  `Depends(get_current_user)`; leitura/exclusão seguem a regra dono-ou-ADMIN (404 para
+  quem não é dono nem ADMIN, nunca 403 — evita revelar a existência do ID); listagem
+  filtrada por `user_id` para usuário comum, sem filtro para ADMIN. Análises criadas
+  antes desta fase ficam com `user_id NULL` (sem backfill artificial).
+- **Fase 2 — Dashboard do usuário + administrativo** — endpoint `GET /dashboard/stats`
+  (`DashboardService`/`DashboardRepository`, só leitura), com volume por status,
+  distribuição por farol (normalizada de `analysis_result->>'overall_band_label'` via
+  `app/core/farol.py`, nunca recalculada a partir do `overall_score`), tendência semanal
+  de nota média, e um "quadro individual" só para ADMIN — agrupado por **PB avaliado**
+  (`pb_id`/`participant_name`), não pelo usuário/CS dono do registro. Escopo (próprias
+  análises vs. globais) sempre derivado do usuário autenticado, nunca de parâmetro do
+  cliente. `AdminDashboardPage` e a seção de KPIs de `DashboardPage` conectadas a esse
+  endpoint; gráfico de tendência com `recharts` (nova dependência do frontend).
 
 ## Roadmap das fases seguintes
 
@@ -69,11 +85,6 @@ Cada fase deve começar com uma nova rodada de exploração + planejamento antes
 implementada — os itens abaixo são a visão de alto nível, não um plano de implementação
 pronto.
 
-- **Fase 2 — Dashboard do usuário + administrativo**: indicadores agregados sobre
-  `Analysis` (volume, distribuição por farol, tendência no tempo).
-- **Fase 3 — Integração de `Analysis` com usuários autenticados**: troca de
-  `DEFAULT_CS_ID`/`DEFAULT_CS_NAME` por `user_id` real, histórico filtrado por usuário,
-  proteção das rotas `/analyses/*`.
 - **Fase 4 — Evolução de métricas**: gráficos temporais e por categoria (ex.: radar dos 6
   critérios), baseados nos dados já persistidos em `analysis_result` (JSONB).
 - **Fase 5 — Biblioteca de conteúdo + trilhas de treinamento**: novas tabelas `Content`,

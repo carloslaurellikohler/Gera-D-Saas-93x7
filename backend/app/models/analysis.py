@@ -7,7 +7,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,6 +52,13 @@ class Analysis(Base):
         index=True,
     )
     error_message: Mapped[str | None] = mapped_column(Text)
+
+    # Dono da análise (usuário autenticado que a criou). Nullable: análises criadas
+    # antes da Fase 3 ficam órfãs (SET NULL se o usuário for removido), nunca com uma
+    # proveniência fictícia — toda análise nova sempre recebe um user_id real.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
 
     # Identidade da interação para a engine (ver mappers.build_input_metadata)
     cs_id: Mapped[str | None] = mapped_column(String(64))

@@ -16,6 +16,7 @@ from app.core.config import Settings
 from app.engine_integration.adapter import EngineAdapter
 from app.engine_integration.mappers import build_input_metadata, slugify
 from app.models.analysis import Analysis, AnalysisStatus
+from app.models.user import User
 from app.repositories.analysis_repository import AnalysisRepository
 from app.services.validation import sanitize_filename, validate_upload
 from app.storage.base import FileStorage
@@ -50,6 +51,7 @@ class AnalysisService:
     def create_and_store(
         self,
         *,
+        current_user: User,
         participant_name: str,
         objective: str,
         objective_complement: str | None,
@@ -76,8 +78,9 @@ class AnalysisService:
             input_type=input_type,
             file_name=safe_name,
             status=AnalysisStatus.CREATED,
-            cs_id=self.settings.DEFAULT_CS_ID,
-            cs_name=self.settings.DEFAULT_CS_NAME,
+            user_id=current_user.id,
+            cs_id=str(current_user.id),
+            cs_name=current_user.name,
             pb_id=slugify(participant_name),
             interaction_id=str(analysis_id),
         )
@@ -120,9 +123,10 @@ class AnalysisService:
 
     def _run_pipeline(self, analysis: Analysis, transcript: Transcript) -> AnalysisResult:
         self.repo.update_status(analysis.id, AnalysisStatus.ANALYZING)
-        metadata = build_input_metadata(
-            analysis, cs_id=self.settings.DEFAULT_CS_ID, cs_name=self.settings.DEFAULT_CS_NAME
-        )
+        # Roda no worker Celery, sem acesso ao usuário autenticado (fronteira de
+        # processo) — lê cs_id/cs_name já persistidos por create_and_store, em vez de
+        # settings, para refletir o usuário que de fato criou a análise.
+        metadata = build_input_metadata(analysis, cs_id=analysis.cs_id, cs_name=analysis.cs_name)
         result = self.engine.run_pipeline(transcript, metadata)
         self.repo.update(analysis.id, analysis_result=result.model_dump(mode="json"))
         return result

@@ -68,3 +68,70 @@ def test_delete(db_session):
     repo.delete(created.id)
 
     assert repo.get(created.id) is None
+
+
+def test_create_with_null_user_id_allowed(db_session):
+    repo = AnalysisRepository(db_session)
+    created = repo.create(_new_analysis(interaction_id="interaction-6"))
+
+    assert created.user_id is None
+    assert repo.get(created.id).user_id is None
+
+
+def test_list_filters_by_user_id(db_session):
+    from app.models.user import User, UserRole, UserStatus
+    from app.repositories.user_repository import UserRepository
+
+    user_repo = UserRepository(db_session)
+    user_a = user_repo.create(
+        User(
+            name="Usuária A",
+            email="a@example.com",
+            password_hash="hash",
+            role=UserRole.USER,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    user_b = user_repo.create(
+        User(
+            name="Usuária B",
+            email="b@example.com",
+            password_hash="hash",
+            role=UserRole.USER,
+            status=UserStatus.ACTIVE,
+        )
+    )
+
+    repo = AnalysisRepository(db_session)
+    owned_by_a = repo.create(
+        _new_analysis(interaction_id="interaction-7", user_id=user_a.id)
+    )
+    repo.create(_new_analysis(interaction_id="interaction-8", user_id=user_b.id))
+    repo.create(_new_analysis(interaction_id="interaction-9"))
+
+    result = repo.list(user_id=user_a.id)
+
+    assert [x.id for x in result] == [owned_by_a.id]
+
+
+def test_list_without_user_id_returns_all(db_session):
+    from app.models.user import User, UserRole, UserStatus
+    from app.repositories.user_repository import UserRepository
+
+    user = UserRepository(db_session).create(
+        User(
+            name="Usuária C",
+            email="c@example.com",
+            password_hash="hash",
+            role=UserRole.USER,
+            status=UserStatus.ACTIVE,
+        )
+    )
+
+    repo = AnalysisRepository(db_session)
+    a = repo.create(_new_analysis(interaction_id="interaction-10"))
+    b = repo.create(_new_analysis(interaction_id="interaction-11", user_id=user.id))
+
+    result = repo.list()
+
+    assert {x.id for x in result} == {a.id, b.id}

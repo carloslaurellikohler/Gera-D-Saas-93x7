@@ -6,9 +6,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import get_analysis_service
+from app.api.deps import get_analysis_service, get_current_user
 from app.core.constants import Objective
-from app.models.analysis import AnalysisStatus
+from app.models.analysis import Analysis, AnalysisStatus
+from app.models.user import User, UserRole
 from app.schemas.analysis import (
     AnalysisListItem,
     AnalysisResponse,
@@ -31,9 +32,15 @@ _TRANSCRIPTION_READY_STATUSES = {
 }
 
 
-def _get_or_404(service: AnalysisService, analysis_id: uuid.UUID):
+def _get_owned_or_404(
+    service: AnalysisService, analysis_id: uuid.UUID, current_user: User
+) -> Analysis:
     analysis = service.repo.get(analysis_id)
-    if analysis is None:
+    # Dono ou ADMIN podem ver/alterar; qualquer outro usuário autenticado recebe o
+    # mesmo 404 de "não existe", para não revelar a existência de IDs alheios.
+    if analysis is None or (
+        current_user.role != UserRole.ADMIN and analysis.user_id != current_user.id
+    ):
         raise HTTPException(status_code=404, detail="Análise não encontrada.")
     return analysis
 
@@ -47,10 +54,12 @@ def create_analysis(
     interaction_date: date | None = Form(None),
     file: UploadFile = File(...),
     service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
 ):
     content = file.file.read()
     try:
         analysis = service.create_and_store(
+            current_user=current_user,
             participant_name=participant_name,
             objective=objective.value,
             objective_complement=objective_complement,
@@ -72,29 +81,39 @@ def list_analyses(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
 ):
     offset = (page - 1) * page_size
-    items = service.repo.list(status=status, offset=offset, limit=page_size)
+    user_id = None if current_user.role == UserRole.ADMIN else current_user.id
+    items = service.repo.list(status=status, user_id=user_id, offset=offset, limit=page_size)
     return PaginatedResponse(items=items, total=len(items), page=page, page_size=page_size)
 
 
 @router.get("/{analysis_id}", response_model=AnalysisResponse)
-def get_analysis(analysis_id: uuid.UUID, service: AnalysisService = Depends(get_analysis_service)):
-    return _get_or_404(service, analysis_id)
+def get_analysis(
+    analysis_id: uuid.UUID,
+    service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
+):
+    return _get_owned_or_404(service, analysis_id, current_user)
 
 
 @router.get("/{analysis_id}/status", response_model=AnalysisStatusResponse)
 def get_analysis_status(
-    analysis_id: uuid.UUID, service: AnalysisService = Depends(get_analysis_service)
+    analysis_id: uuid.UUID,
+    service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
 ):
-    return _get_or_404(service, analysis_id)
+    return _get_owned_or_404(service, analysis_id, current_user)
 
 
 @router.get("/{analysis_id}/transcription", response_model=AnalysisTranscriptionResponse)
 def get_transcription(
-    analysis_id: uuid.UUID, service: AnalysisService = Depends(get_analysis_service)
+    analysis_id: uuid.UUID,
+    service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
 ):
-    analysis = _get_or_404(service, analysis_id)
+    analysis = _get_owned_or_404(service, analysis_id, current_user)
     if analysis.status not in _TRANSCRIPTION_READY_STATUSES:
         raise HTTPException(status_code=409, detail="Transcrição ainda não está disponível.")
     return AnalysisTranscriptionResponse(id=analysis.id, transcription=analysis.transcription)
@@ -106,8 +125,9 @@ def get_report(
     kind: str = Query("executivo", pattern="^(executivo|detalhado)$"),
     response_format: str = Query("pdf", pattern="^(pdf|json)$", alias="format"),
     service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
 ):
-    analysis = _get_or_404(service, analysis_id)
+    analysis = _get_owned_or_404(service, analysis_id, current_user)
     if analysis.status != AnalysisStatus.COMPLETED:
         raise HTTPException(status_code=409, detail="A análise ainda não foi concluída.")
 
@@ -123,8 +143,12 @@ def get_report(
 
 
 @router.delete("/{analysis_id}", status_code=204)
-def delete_analysis(analysis_id: uuid.UUID, service: AnalysisService = Depends(get_analysis_service)):
-    analysis = _get_or_404(service, analysis_id)
+def delete_analysis(
+    analysis_id: uuid.UUID,
+    service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
+):
+    analysis = _get_owned_or_404(service, analysis_id, current_user)
     for ref in (analysis.file_path, analysis.executive_report_path, analysis.detailed_report_path):
         if ref:
             service.storage.delete(ref)

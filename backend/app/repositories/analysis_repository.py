@@ -26,12 +26,15 @@ class AnalysisRepository:
         self,
         *,
         status: AnalysisStatus | None = None,
+        user_id: uuid.UUID | None = None,
         offset: int = 0,
         limit: int = 20,
     ) -> list[Analysis]:
         stmt = select(Analysis).order_by(Analysis.created_at.desc())
         if status is not None:
             stmt = stmt.where(Analysis.status == status)
+        if user_id is not None:
+            stmt = stmt.where(Analysis.user_id == user_id)
         stmt = stmt.offset(offset).limit(limit)
         return list(self.db.execute(stmt).scalars().all())
 

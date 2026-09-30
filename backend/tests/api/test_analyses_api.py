@@ -126,3 +126,97 @@ def test_create_analysis_enqueues_processing_task(client, mocker):
 
     assert response.status_code == 201
     delay_mock.assert_called_once_with(response.json()["id"])
+
+
+def test_create_analysis_requires_authentication(unauthenticated_client):
+    response = _create_analysis(unauthenticated_client)
+    assert response.status_code == 401
+
+
+def test_created_analysis_has_correct_owner(client, api_service):
+    import uuid
+
+    created = _create_analysis(client).json()
+
+    analysis = api_service.repo.get(uuid.UUID(created["id"]))
+    assert analysis.user_id is not None
+
+
+def test_list_only_returns_own_for_regular_user(client_factory):
+    owner_client, owner = client_factory()
+    other_client, _ = client_factory()
+
+    _create_analysis(owner_client, participant_name="Ana")
+    _create_analysis(other_client, participant_name="Bruno")
+
+    response = owner_client.get("/api/v1/analyses")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["participant_name"] == "Ana"
+
+
+def test_list_returns_all_for_admin(client_factory, admin_client):
+    owner_client, _ = client_factory()
+    other_client, _ = client_factory()
+
+    _create_analysis(owner_client, participant_name="Ana")
+    _create_analysis(other_client, participant_name="Bruno")
+
+    response = admin_client.get("/api/v1/analyses")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    names = {item["participant_name"] for item in body["items"]}
+    assert names == {"Ana", "Bruno"}
+
+
+def test_get_404_for_non_owner_non_admin(client_factory):
+    owner_client, _ = client_factory()
+    other_client, _ = client_factory()
+
+    created = _create_analysis(owner_client).json()
+
+    response = other_client.get(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 404
+
+
+def test_admin_can_get_any_analysis(client_factory, admin_client):
+    owner_client, _ = client_factory()
+    created = _create_analysis(owner_client).json()
+
+    response = admin_client.get(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == created["id"]
+
+
+def test_delete_by_owner_allowed(client_factory):
+    owner_client, _ = client_factory()
+    created = _create_analysis(owner_client).json()
+
+    response = owner_client.delete(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 204
+
+
+def test_delete_by_non_owner_non_admin_returns_404(client_factory):
+    owner_client, _ = client_factory()
+    other_client, _ = client_factory()
+    created = _create_analysis(owner_client).json()
+
+    response = other_client.delete(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 404
+
+
+def test_delete_by_admin_allowed(client_factory, admin_client):
+    owner_client, _ = client_factory()
+    created = _create_analysis(owner_client).json()
+
+    response = admin_client.delete(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 204

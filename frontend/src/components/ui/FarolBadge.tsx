@@ -1,6 +1,6 @@
 import Icon from "./Icon";
 
-export type FarolLevel = "excelente" | "atencao" | "prioritario" | "critico";
+export type FarolLevel = "excelente" | "atencao" | "prioritario" | "critico" | "outro";
 
 interface Variant {
   label: string;
@@ -21,7 +21,14 @@ const VARIANTS: Record<FarolLevel, Variant> = {
     icon: "flag",
   },
   critico: { label: "Desenvolvimento Crítico", fg: "#A10019", bg: "#FDE7EA", bd: "#EF9A9A", icon: "cancel" },
+  // Fallback para um overall_band_label que o backend ainda não sabe mapear (ver
+  // app/core/farol.py) — não deve travar a UI, só indicar "sem classificação".
+  outro: { label: "Sem classificação", fg: "#4A4A4A", bg: "#EEEEEE", bd: "#CCCCCC", icon: "help" },
 };
+
+export function toFarolLevel(level: string): FarolLevel {
+  return level in VARIANTS ? (level as FarolLevel) : "outro";
+}
 
 export function farolLevelForScore(score: number): FarolLevel {
   if (score >= 85) return "excelente";

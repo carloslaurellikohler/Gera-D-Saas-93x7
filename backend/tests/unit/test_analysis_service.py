@@ -8,7 +8,9 @@ from gera_d_engine.schemas.transcript import Transcript, TranscriptTurn
 
 from app.core.config import Settings
 from app.models.analysis import AnalysisStatus
+from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
 from app.storage.local_storage import LocalDiskStorage
 
@@ -30,8 +32,22 @@ def service(db_session, storage, settings) -> AnalysisService:
     return AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
 
 
-def _create_uploaded_analysis(service: AnalysisService, storage: LocalDiskStorage):
+@pytest.fixture()
+def current_user(db_session) -> User:
+    return UserRepository(db_session).create(
+        User(
+            name="Consultora Teste",
+            email="consultora@example.com",
+            password_hash="hash",
+            role=UserRole.USER,
+            status=UserStatus.ACTIVE,
+        )
+    )
+
+
+def _create_uploaded_analysis(service: AnalysisService, storage: LocalDiskStorage, current_user: User):
     analysis = service.create_and_store(
+        current_user=current_user,
         participant_name="João Silva",
         objective="Onboarding",
         objective_complement=None,
@@ -65,23 +81,24 @@ def _fake_result(tmp_path: Path):
     return result, export_reports
 
 
-def test_create_and_store_uploads_file_and_sets_status(service: AnalysisService, storage):
-    analysis = _create_uploaded_analysis(service, storage)
+def test_create_and_store_uploads_file_and_sets_status(service: AnalysisService, storage, current_user):
+    analysis = _create_uploaded_analysis(service, storage, current_user)
 
     assert analysis.status == AnalysisStatus.UPLOADED
     assert analysis.input_type == "txt"
     assert analysis.file_path is not None
     assert storage.read(analysis.file_path) == b"CS: Oi\nPB: Oi"
-    assert analysis.cs_id == "cs-1"
-    assert analysis.cs_name == "Consultor Teste"
+    assert analysis.cs_id == str(current_user.id)
+    assert analysis.cs_name == current_user.name
     assert analysis.duration_seconds == 45 * 60
 
 
-def test_create_and_store_accepts_real_mp3_signature(service: AnalysisService, storage):
+def test_create_and_store_accepts_real_mp3_signature(service: AnalysisService, storage, current_user):
     # Cabeçalho ID3v2 real (gerado com ffmpeg) — prova que validate_upload aceita áudio de
     # verdade, não só a extensão declarada (ver services/validation.py).
     mp3_content = b"ID3\x04\x00\x00\x00\x00\x00\x23" + b"\x00" * 100
     analysis = service.create_and_store(
+        current_user=current_user,
         participant_name="Carlos",
         objective="Reunião comercial",
         objective_complement=None,
@@ -96,8 +113,8 @@ def test_create_and_store_accepts_real_mp3_signature(service: AnalysisService, s
     assert storage.read(analysis.file_path) == mp3_content
 
 
-def test_run_analysis_job_happy_path_reaches_completed(service: AnalysisService, storage, tmp_path):
-    analysis = _create_uploaded_analysis(service, storage)
+def test_run_analysis_job_happy_path_reaches_completed(service: AnalysisService, storage, tmp_path, current_user):
+    analysis = _create_uploaded_analysis(service, storage, current_user)
 
     transcript = _fake_transcript()
     result, export_reports_fn = _fake_result(tmp_path)
@@ -119,12 +136,12 @@ def test_run_analysis_job_happy_path_reaches_completed(service: AnalysisService,
 
     service.engine.run_pipeline.assert_called_once()
     called_metadata = service.engine.run_pipeline.call_args.args[1]
-    assert called_metadata.cs_id == "cs-1"
+    assert called_metadata.cs_id == str(current_user.id)
     assert called_metadata.pb_name == "João Silva"
 
 
-def test_run_analysis_job_records_status_sequence(service: AnalysisService, storage, tmp_path):
-    analysis = _create_uploaded_analysis(service, storage)
+def test_run_analysis_job_records_status_sequence(service: AnalysisService, storage, tmp_path, current_user):
+    analysis = _create_uploaded_analysis(service, storage, current_user)
     observed_statuses: list[AnalysisStatus] = []
 
     original_update_status = service.repo.update_status
@@ -151,9 +168,9 @@ def test_run_analysis_job_records_status_sequence(service: AnalysisService, stor
 
 
 def test_run_analysis_job_transcription_failure_sets_failed_with_safe_message(
-    service: AnalysisService, storage
+    service: AnalysisService, storage, current_user
 ):
-    analysis = _create_uploaded_analysis(service, storage)
+    analysis = _create_uploaded_analysis(service, storage, current_user)
     service.engine.load_transcript.side_effect = RuntimeError(
         "segredo interno: chave de API invalida xyz123"
     )
@@ -169,9 +186,9 @@ def test_run_analysis_job_transcription_failure_sets_failed_with_safe_message(
 
 
 def test_run_analysis_job_pipeline_failure_sets_failed_with_safe_message(
-    service: AnalysisService, storage
+    service: AnalysisService, storage, current_user
 ):
-    analysis = _create_uploaded_analysis(service, storage)
+    analysis = _create_uploaded_analysis(service, storage, current_user)
     service.engine.load_transcript.return_value = _fake_transcript()
     service.engine.run_pipeline.side_effect = RuntimeError("boom")
 
@@ -186,9 +203,9 @@ def test_run_analysis_job_pipeline_failure_sets_failed_with_safe_message(
 
 
 def test_run_analysis_job_reports_failure_sets_failed_with_safe_message(
-    service: AnalysisService, storage
+    service: AnalysisService, storage, current_user
 ):
-    analysis = _create_uploaded_analysis(service, storage)
+    analysis = _create_uploaded_analysis(service, storage, current_user)
     service.engine.load_transcript.return_value = _fake_transcript()
     result = MagicMock()
     result.model_dump.return_value = {"overall_score": 5.0}
@@ -202,3 +219,41 @@ def test_run_analysis_job_reports_failure_sets_failed_with_safe_message(
     assert final.status == AnalysisStatus.FAILED
     assert final.error_message == "Falha ao gerar os relatórios."
     assert final.analysis_result is not None
+
+
+def test_create_and_store_uses_current_user_as_cs_identity(
+    service: AnalysisService, storage, current_user
+):
+    analysis = _create_uploaded_analysis(service, storage, current_user)
+
+    assert analysis.user_id == current_user.id
+    assert analysis.cs_id == str(current_user.id)
+    assert analysis.cs_name == current_user.name
+
+
+def test_run_pipeline_does_not_depend_on_settings_defaults(
+    db_session, storage, tmp_path, current_user
+):
+    # Settings com DEFAULT_CS_ID/DEFAULT_CS_NAME propositalmente diferentes do usuário —
+    # confirma que _run_pipeline lê analysis.cs_id/cs_name (persistidos a partir do
+    # usuário autenticado), nunca settings, ao montar o metadata para a engine.
+    settings = Settings(
+        DEFAULT_CS_ID="settings-default-id", DEFAULT_CS_NAME="Settings Default Name", MAX_UPLOAD_MB=100
+    )
+    repo = AnalysisRepository(db_session)
+    engine = MagicMock()
+    service = AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
+
+    analysis = _create_uploaded_analysis(service, storage, current_user)
+
+    transcript = _fake_transcript()
+    result, export_reports_fn = _fake_result(tmp_path)
+    service.engine.load_transcript.return_value = transcript
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id)
+
+    called_metadata = service.engine.run_pipeline.call_args.args[1]
+    assert called_metadata.cs_id == str(current_user.id)
+    assert called_metadata.cs_name == current_user.name

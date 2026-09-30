@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -8,8 +9,12 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_analysis_service
 from app.core.config import Settings
+from app.core.security import hash_password
+from app.db.session import get_db
 from app.main import app
+from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
 from app.storage.local_storage import LocalDiskStorage
 
@@ -25,10 +30,55 @@ def api_service(db_session, tmp_path: Path) -> AnalysisService:
 
 
 @pytest.fixture()
-def client(api_service: AnalysisService, mocker):
+def _overrides(api_service, db_session, mocker):
     mocker.patch("app.api.routes.analyses.process_analysis_task.delay")
-
     app.dependency_overrides[get_analysis_service] = lambda: api_service
-    with TestClient(app) as test_client:
-        yield test_client
+    app.dependency_overrides[get_db] = lambda: db_session
+    yield
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def unauthenticated_client(_overrides) -> TestClient:
+    """Cliente sem login — para testar que as rotas exigem autenticação."""
+    return TestClient(app)
+
+
+@pytest.fixture()
+def client_factory(_overrides, db_session):
+    """Fábrica de TestClients autenticados — cada chamada cria um usuário novo, faz
+    login e devolve (client, user). Usada quando um teste precisa de mais de uma
+    identidade (ex.: dono vs. não-dono, usuário comum vs. ADMIN)."""
+
+    def _make(role: UserRole = UserRole.USER, **user_overrides) -> tuple[TestClient, User]:
+        defaults = dict(
+            name="Usuária Teste",
+            email=f"user-{uuid.uuid4()}@example.com",
+            password_hash=hash_password("correct-password"),
+            role=role,
+            status=UserStatus.ACTIVE,
+        )
+        defaults.update(user_overrides)
+        user = UserRepository(db_session).create(User(**defaults))
+        test_client = TestClient(app)
+        login = test_client.post(
+            "/api/v1/auth/login", json={"email": user.email, "password": "correct-password"}
+        )
+        assert login.status_code == 200
+        return test_client, user
+
+    return _make
+
+
+@pytest.fixture()
+def client(client_factory) -> TestClient:
+    """Cliente autenticado como um usuário comum — usado pela maioria dos testes
+    existentes, que operam sobre as próprias análises."""
+    test_client, _ = client_factory()
+    return test_client
+
+
+@pytest.fixture()
+def admin_client(client_factory) -> TestClient:
+    test_client, _ = client_factory(role=UserRole.ADMIN)
+    return test_client

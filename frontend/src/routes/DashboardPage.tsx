@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAnalyses } from "../hooks/useAnalyses";
+import { useDashboardStats } from "../hooks/useDashboardStats";
 import { formatDate } from "../lib/format";
 import StatusBadge from "../components/ui/StatusBadge";
 import EmptyState from "../components/ui/EmptyState";
+import FarolBadge, { toFarolLevel } from "../components/ui/FarolBadge";
 import Icon from "../components/ui/Icon";
 import type { AnalysisListItem, AnalysisStatus } from "../types/analysis";
 
@@ -32,8 +34,28 @@ function initialsOf(name: string): string {
 
 export default function DashboardPage() {
   const { data, isLoading, isError } = useAnalyses();
+  const { data: stats } = useDashboardStats();
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [search, setSearch] = useState("");
+
+  const statsTotalVolume = useMemo(
+    () => stats?.volume_by_status.reduce((sum, v) => sum + v.count, 0) ?? 0,
+    [stats],
+  );
+
+  const statsAvgScore = useMemo(() => {
+    if (!stats) return null;
+    const scored = stats.trend.filter((t) => t.avg_score !== null);
+    const totalCount = scored.reduce((sum, t) => sum + t.count, 0);
+    if (totalCount === 0) return null;
+    const weighted = scored.reduce((sum, t) => sum + (t.avg_score ?? 0) * t.count, 0);
+    return weighted / totalCount;
+  }, [stats]);
+
+  const statsPredominantFarol = useMemo(() => {
+    if (!stats || stats.farol_distribution.length === 0) return null;
+    return stats.farol_distribution.reduce((max, item) => (item.count > max.count ? item : max));
+  }, [stats]);
 
   const counts = useMemo(() => {
     const items = data?.items ?? [];
@@ -64,6 +86,32 @@ export default function DashboardPage() {
           Nova análise
         </Link>
       </div>
+
+      {stats && statsTotalVolume > 0 && (
+        <div className="kpi-grid" style={{ margin: "20px 0" }}>
+          <div className="kpi-card">
+            <span className="kpi-label">Minhas análises</span>
+            <span className="kpi-value">{statsTotalVolume}</span>
+            <span className="kpi-description">Últimos 6 meses</span>
+          </div>
+          <div className="kpi-card">
+            <span className="kpi-label">Minha nota média</span>
+            <span className="kpi-value">{statsAvgScore !== null ? statsAvgScore.toFixed(1) : "—"}</span>
+            <span className="kpi-description">Escala de 0 a 10</span>
+          </div>
+          <div className="kpi-card">
+            <span className="kpi-label">Farol predominante</span>
+            <span className="kpi-value" style={{ fontSize: 18 }}>
+              {statsPredominantFarol ? (
+                <FarolBadge level={toFarolLevel(statsPredominantFarol.level)} />
+              ) : (
+                "—"
+              )}
+            </span>
+            <span className="kpi-description">{statsPredominantFarol?.pct ?? ""}</span>
+          </div>
+        </div>
+      )}
 
       {isLoading && <p className="page-subtitle">Carregando...</p>}
       {isError && <p className="error-text">Não foi possível carregar as análises.</p>}
