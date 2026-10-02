@@ -23,6 +23,28 @@ class ContentRepository:
     def get(self, content_id: uuid.UUID) -> Content | None:
         return self.db.get(Content, content_id)
 
+    def update(
+        self,
+        content_id: uuid.UUID,
+        *,
+        title: str,
+        description: str | None,
+        criterion_key: CriterionKey | None,
+        file_path: str | None,
+        external_url: str | None,
+    ) -> Content | None:
+        content = self.get(content_id)
+        if content is None:
+            return None
+        content.title = title
+        content.description = description
+        content.criterion_key = criterion_key
+        content.file_path = file_path
+        content.external_url = external_url
+        self.db.commit()
+        self.db.refresh(content)
+        return content
+
     def list(self, *, criterion_key: CriterionKey | None = None) -> list[Content]:
         stmt = select(Content).order_by(Content.created_at.desc())
         if criterion_key is not None:

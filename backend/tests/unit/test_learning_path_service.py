@@ -15,7 +15,11 @@ from app.repositories.learning_path_enrollment_repository import LearningPathEnr
 from app.repositories.learning_path_repository import LearningPathRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.learning_path import CreateLearningPathItem, CreateLearningPathRequest
+from app.schemas.learning_path import (
+    CreateLearningPathItem,
+    CreateLearningPathRequest,
+    UpdateLearningPathRequest,
+)
 from app.services.learning_path_service import (
     _CRITERION_VALUES,
     LearningPathItemNotFoundError,
@@ -78,6 +82,54 @@ def test_create_and_get_detail_roundtrip(service, admin_user, db_session):
     fetched = service.get_detail(detail.id)
     assert fetched is not None
     assert fetched.id == detail.id
+
+
+def test_update_returns_none_when_not_found(service):
+    import uuid
+
+    request = UpdateLearningPathRequest(title="Qualquer")
+
+    assert service.update(uuid.uuid4(), request=request) is None
+
+
+def test_update_rejects_unknown_content_id(service, admin_user, db_session):
+    import uuid
+
+    created = service.create(request=CreateLearningPathRequest(title="Original"), created_by=admin_user)
+    request = UpdateLearningPathRequest(
+        title="Atualizada", items=[CreateLearningPathItem(content_id=uuid.uuid4(), order_index=0)]
+    )
+
+    with pytest.raises(ValueError):
+        service.update(created.id, request=request)
+
+
+def test_update_replaces_items_and_returns_detail(service, admin_user, db_session):
+    content_a = ContentRepository(db_session).create(
+        Content(title="Módulo A", kind=ContentKind.LINK, external_url="https://a.example")
+    )
+    content_b = ContentRepository(db_session).create(
+        Content(title="Módulo B", kind=ContentKind.LINK, external_url="https://b.example")
+    )
+    created = service.create(
+        request=CreateLearningPathRequest(
+            title="Original", items=[CreateLearningPathItem(content_id=content_a.id, order_index=0)]
+        ),
+        created_by=admin_user,
+    )
+
+    request = UpdateLearningPathRequest(
+        title="Atualizada",
+        criterion_key=CriterionKey.CONEXAO,
+        items=[CreateLearningPathItem(content_id=content_b.id, order_index=0)],
+    )
+    updated = service.update(created.id, request=request)
+
+    assert updated is not None
+    assert updated.title == "Atualizada"
+    assert updated.criterion_key == CriterionKey.CONEXAO
+    assert len(updated.items) == 1
+    assert updated.items[0].content.title == "Módulo B"
 
 
 def _completed_analysis(db_session, *, user_id, interaction_id: str, criterion_scores: dict[str, float]):

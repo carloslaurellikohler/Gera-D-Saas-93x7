@@ -26,6 +26,7 @@ class LearningPathSummary(BaseModel):
     estimated_duration_minutes: int | None
     item_count: int
     created_at: datetime
+    updated_at: datetime | None = None
 
 
 class LearningPathDetail(BaseModel):
@@ -35,6 +36,7 @@ class LearningPathDetail(BaseModel):
     criterion_key: CriterionKey | None
     estimated_duration_minutes: int | None
     created_at: datetime
+    updated_at: datetime | None = None
     items: list[LearningPathItemResponse]
 
 
@@ -63,6 +65,14 @@ class CreateLearningPathItem(BaseModel):
 
 
 class CreateLearningPathRequest(BaseModel):
+    title: str
+    description: str | None = None
+    criterion_key: CriterionKey | None = None
+    estimated_duration_minutes: int | None = None
+    items: list[CreateLearningPathItem] = []
+
+
+class UpdateLearningPathRequest(BaseModel):
     title: str
     description: str | None = None
     criterion_key: CriterionKey | None = None

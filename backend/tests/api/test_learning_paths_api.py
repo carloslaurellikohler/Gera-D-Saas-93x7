@@ -125,6 +125,77 @@ def test_admin_can_delete_learning_path(admin_client):
     assert admin_client.get(f"/api/v1/learning-paths/{created['id']}").status_code == 404
 
 
+def test_update_learning_path_requires_authentication(unauthenticated_client, admin_client):
+    created = admin_client.post("/api/v1/learning-paths", json={"title": "Trilha"}).json()
+
+    response = unauthenticated_client.put(
+        f"/api/v1/learning-paths/{created['id']}", json={"title": "Atualizada"}
+    )
+    assert response.status_code == 401
+
+
+def test_regular_user_cannot_update_learning_path(client, admin_client):
+    created = admin_client.post("/api/v1/learning-paths", json={"title": "Trilha"}).json()
+
+    response = client.put(f"/api/v1/learning-paths/{created['id']}", json={"title": "Atualizada"})
+    assert response.status_code == 403
+
+
+def test_update_learning_path_not_found(admin_client):
+    response = admin_client.put(
+        f"/api/v1/learning-paths/{uuid.uuid4()}", json={"title": "Atualizada"}
+    )
+    assert response.status_code == 404
+
+
+def test_update_learning_path_rejects_unknown_content_id(admin_client):
+    created = admin_client.post("/api/v1/learning-paths", json={"title": "Trilha"}).json()
+
+    response = admin_client.put(
+        f"/api/v1/learning-paths/{created['id']}",
+        json={"title": "Atualizada", "items": [{"content_id": str(uuid.uuid4()), "order_index": 0}]},
+    )
+    assert response.status_code == 422
+
+
+def test_admin_can_update_learning_path_metadata_and_items(admin_client):
+    content_a = admin_client.post(
+        "/api/v1/content",
+        data={"title": "Material A", "kind": "LINK", "external_url": "https://a.example"},
+    ).json()
+    content_b = admin_client.post(
+        "/api/v1/content",
+        data={"title": "Material B", "kind": "LINK", "external_url": "https://b.example"},
+    ).json()
+    created = admin_client.post(
+        "/api/v1/learning-paths",
+        json={
+            "title": "Original",
+            "items": [{"content_id": content_a["id"], "order_index": 0}],
+        },
+    ).json()
+
+    response = admin_client.put(
+        f"/api/v1/learning-paths/{created['id']}",
+        json={
+            "title": "Atualizada",
+            "criterion_key": "conexao",
+            "items": [{"content_id": content_b["id"], "order_index": 0}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "Atualizada"
+    assert body["criterion_key"] == "conexao"
+    assert len(body["items"]) == 1
+    assert body["items"][0]["content"]["id"] == content_b["id"]
+
+    fetched = admin_client.get(f"/api/v1/learning-paths/{created['id']}").json()
+    assert fetched["title"] == "Atualizada"
+    assert len(fetched["items"]) == 1
+
+
 def _create_path_with_items(admin_client, *, item_count: int = 2) -> dict:
     content_ids = [
         admin_client.post(

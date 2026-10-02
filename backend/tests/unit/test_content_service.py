@@ -91,6 +91,131 @@ def test_create_link_without_url_raises(service, admin_user):
         )
 
 
+def test_update_returns_none_when_not_found(service):
+    import uuid
+
+    result = service.update(
+        uuid.uuid4(),
+        title="Qualquer",
+        description=None,
+        criterion_key=None,
+        file_name=None,
+        file_content=None,
+        external_url=None,
+    )
+
+    assert result is None
+
+
+def test_update_link_changes_external_url(service, admin_user):
+    content = service.create(
+        title="Vídeo-aula",
+        description=None,
+        criterion_key=None,
+        kind=ContentKind.LINK,
+        file_name=None,
+        file_content=None,
+        external_url="https://youtube.com/watch?v=abc",
+        uploaded_by=admin_user,
+    )
+
+    updated = service.update(
+        content.id,
+        title="Vídeo-aula atualizada",
+        description="Nova descrição",
+        criterion_key=None,
+        file_name=None,
+        file_content=None,
+        external_url="https://youtube.com/watch?v=xyz",
+    )
+
+    assert updated is not None
+    assert updated.title == "Vídeo-aula atualizada"
+    assert updated.external_url == "https://youtube.com/watch?v=xyz"
+
+
+def test_update_link_without_external_url_raises(service, admin_user):
+    content = service.create(
+        title="Vídeo-aula",
+        description=None,
+        criterion_key=None,
+        kind=ContentKind.LINK,
+        file_name=None,
+        file_content=None,
+        external_url="https://youtube.com/watch?v=abc",
+        uploaded_by=admin_user,
+    )
+
+    with pytest.raises(ValueError):
+        service.update(
+            content.id,
+            title="Vídeo-aula",
+            description=None,
+            criterion_key=None,
+            file_name=None,
+            file_content=None,
+            external_url=None,
+        )
+
+
+def test_update_file_without_new_upload_keeps_existing_file_path(service, admin_user):
+    content = service.create(
+        title="Apostila",
+        description=None,
+        criterion_key=None,
+        kind=ContentKind.FILE,
+        file_name="apostila.pdf",
+        file_content=b"%PDF-1.4" + b"\x00" * 10,
+        external_url=None,
+        uploaded_by=admin_user,
+    )
+    original_path = content.file_path
+
+    updated = service.update(
+        content.id,
+        title="Apostila atualizada",
+        description=None,
+        criterion_key=None,
+        file_name=None,
+        file_content=None,
+        external_url=None,
+    )
+
+    assert updated is not None
+    assert updated.title == "Apostila atualizada"
+    assert updated.file_path == original_path
+    assert service.storage.path(original_path).exists()
+
+
+def test_update_file_with_new_upload_replaces_file_and_deletes_old(service, admin_user):
+    content = service.create(
+        title="Apostila",
+        description=None,
+        criterion_key=None,
+        kind=ContentKind.FILE,
+        file_name="apostila.pdf",
+        file_content=b"%PDF-1.4" + b"\x00" * 10,
+        external_url=None,
+        uploaded_by=admin_user,
+    )
+    original_path = content.file_path
+
+    updated = service.update(
+        content.id,
+        title="Apostila",
+        description=None,
+        criterion_key=None,
+        file_name="apostila-v2.pdf",
+        file_content=b"%PDF-1.4" + b"\x11" * 20,
+        external_url=None,
+    )
+
+    assert updated is not None
+    assert updated.file_path != original_path
+    assert not service.storage.path(original_path).exists()
+    assert service.storage.read(updated.file_path).startswith(b"%PDF-")
+
+
 def test_delete_blocked_when_referenced_by_learning_path(service, admin_user, db_session):
     content = service.create(
         title="Material em uso",

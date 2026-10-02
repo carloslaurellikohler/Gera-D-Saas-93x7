@@ -67,6 +67,45 @@ def test_is_referenced_by_learning_path(db_session, admin_user):
     assert repo.is_referenced_by_learning_path(other_content.id) is False
 
 
+def test_update_persists_metadata_changes(db_session, admin_user):
+    from app.core.constants import CriterionKey
+
+    content = _content(db_session, title="Original")
+    repo = ContentRepository(db_session)
+
+    updated = repo.update(
+        content.id,
+        title="Atualizado",
+        description="Nova descrição",
+        criterion_key=CriterionKey.CONEXAO,
+        file_path=None,
+        external_url="https://example.com/novo",
+    )
+
+    assert updated is not None
+    assert updated.title == "Atualizado"
+    assert updated.description == "Nova descrição"
+    assert updated.criterion_key == CriterionKey.CONEXAO
+    assert updated.external_url == "https://example.com/novo"
+
+
+def test_update_returns_none_when_not_found(db_session):
+    import uuid
+
+    repo = ContentRepository(db_session)
+
+    result = repo.update(
+        uuid.uuid4(),
+        title="Qualquer",
+        description=None,
+        criterion_key=None,
+        file_path=None,
+        external_url=None,
+    )
+
+    assert result is None
+
+
 def test_delete_removes_content(db_session):
     content = _content(db_session, title="Para apagar")
     repo = ContentRepository(db_session)

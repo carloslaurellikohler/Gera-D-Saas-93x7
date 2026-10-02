@@ -56,6 +56,48 @@ def test_list_by_criterion_keys_filters_correctly(db_session, admin_user):
     assert [lp.id for lp in result] == [sondagem.id]
 
 
+def test_update_replaces_items_and_metadata(db_session, admin_user, contents):
+    repo = LearningPathRepository(db_session)
+    learning_path = repo.create(
+        LearningPath(title="Original", created_by_id=admin_user.id),
+        items=[(contents[0].id, 0)],
+    )
+
+    updated = repo.update(
+        learning_path.id,
+        title="Atualizada",
+        description="Nova descrição",
+        criterion_key=CriterionKey.SONDAGEM,
+        estimated_duration_minutes=30,
+        items=[(contents[1].id, 0)],
+    )
+
+    assert updated is not None
+    assert updated.title == "Atualizada"
+    assert updated.description == "Nova descrição"
+    assert updated.criterion_key == CriterionKey.SONDAGEM
+    assert updated.estimated_duration_minutes == 30
+    rows = repo.list_items(learning_path.id)
+    assert [content.title for _, content in rows] == ["Módulo 2"]
+
+
+def test_update_returns_none_when_not_found(db_session):
+    import uuid
+
+    repo = LearningPathRepository(db_session)
+
+    result = repo.update(
+        uuid.uuid4(),
+        title="Qualquer",
+        description=None,
+        criterion_key=None,
+        estimated_duration_minutes=None,
+        items=[],
+    )
+
+    assert result is None
+
+
 def test_delete_cascades_to_items(db_session, admin_user, contents):
     repo = LearningPathRepository(db_session)
     learning_path = repo.create(

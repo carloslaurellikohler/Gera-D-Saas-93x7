@@ -19,6 +19,7 @@ export interface ContentResponse {
   external_url: string | null;
   uploaded_by_id: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface CreateContentPayload {
@@ -26,6 +27,14 @@ export interface CreateContentPayload {
   description?: string;
   criterion_key?: CriterionKey;
   kind: ContentKind;
+  file?: File;
+  external_url?: string;
+}
+
+export interface UpdateContentPayload {
+  title: string;
+  description?: string;
+  criterion_key?: CriterionKey;
   file?: File;
   external_url?: string;
 }

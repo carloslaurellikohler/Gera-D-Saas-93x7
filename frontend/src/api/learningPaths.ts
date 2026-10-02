@@ -1,10 +1,11 @@
-import { apiDelete, apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPost, apiPut } from "./client";
 import type {
   CreateLearningPathPayload,
   EnrolledLearningPathSummary,
   EnrollmentResponse,
   LearningPathDetail,
   LearningPathSummary,
+  UpdateLearningPathPayload,
 } from "../types/learningPath";
 
 export function listLearningPaths() {
@@ -21,6 +22,10 @@ export function getLearningPath(id: string) {
 
 export function createLearningPath(payload: CreateLearningPathPayload) {
   return apiPost<LearningPathDetail>("/learning-paths", payload);
+}
+
+export function updateLearningPath(id: string, payload: UpdateLearningPathPayload) {
+  return apiPut<LearningPathDetail>(`/learning-paths/${id}`, payload);
 }
 
 export function deleteLearningPath(id: string) {

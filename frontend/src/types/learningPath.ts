@@ -15,6 +15,7 @@ export interface LearningPathSummary {
   estimated_duration_minutes: number | null;
   item_count: number;
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface LearningPathDetail {
@@ -24,6 +25,7 @@ export interface LearningPathDetail {
   criterion_key: CriterionKey | null;
   estimated_duration_minutes: number | null;
   created_at: string;
+  updated_at?: string | null;
   items: LearningPathItemResponse[];
 }
 
@@ -33,6 +35,14 @@ export interface CreateLearningPathItem {
 }
 
 export interface CreateLearningPathPayload {
+  title: string;
+  description?: string;
+  criterion_key?: CriterionKey;
+  estimated_duration_minutes?: number;
+  items?: CreateLearningPathItem[];
+}
+
+export interface UpdateLearningPathPayload {
   title: string;
   description?: string;
   criterion_key?: CriterionKey;

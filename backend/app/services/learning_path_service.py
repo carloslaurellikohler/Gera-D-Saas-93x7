@@ -27,6 +27,7 @@ from app.schemas.learning_path import (
     LearningPathDetail,
     LearningPathItemResponse,
     LearningPathSummary,
+    UpdateLearningPathRequest,
 )
 
 _RECOMMENDATION_WINDOW_DAYS = 90
@@ -74,6 +75,25 @@ class LearningPathService:
         )
         return self.get_detail(learning_path.id)  # type: ignore[return-value]
 
+    def update(
+        self, learning_path_id: uuid.UUID, *, request: UpdateLearningPathRequest
+    ) -> LearningPathDetail | None:
+        if self.repo.get(learning_path_id) is None:
+            return None
+        for item in request.items:
+            if self.content_repo.get(item.content_id) is None:
+                raise ValueError(f"Material {item.content_id} não encontrado.")
+
+        self.repo.update(
+            learning_path_id,
+            title=request.title,
+            description=request.description,
+            criterion_key=request.criterion_key,
+            estimated_duration_minutes=request.estimated_duration_minutes,
+            items=[(i.content_id, i.order_index) for i in request.items],
+        )
+        return self.get_detail(learning_path_id)
+
     def get_detail(
         self, learning_path_id: uuid.UUID, *, current_user: User | None = None
     ) -> LearningPathDetail | None:
@@ -97,6 +117,7 @@ class LearningPathService:
             criterion_key=learning_path.criterion_key,
             estimated_duration_minutes=learning_path.estimated_duration_minutes,
             created_at=learning_path.created_at,
+            updated_at=learning_path.updated_at,
             items=[
                 LearningPathItemResponse(
                     id=item.id,
@@ -194,6 +215,7 @@ class LearningPathService:
             estimated_duration_minutes=learning_path.estimated_duration_minutes,
             item_count=self.repo.count_items(learning_path.id),
             created_at=learning_path.created_at,
+            updated_at=learning_path.updated_at,
         )
 
 

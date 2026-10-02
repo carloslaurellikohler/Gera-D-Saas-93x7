@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import EmptyState from "../components/ui/EmptyState";
@@ -9,11 +9,17 @@ import InProgressTab from "../components/library/InProgressTab";
 import { useContentLibrary } from "../hooks/useContentLibrary";
 import { useCreateContent } from "../hooks/useCreateContent";
 import { useCreateLearningPath } from "../hooks/useCreateLearningPath";
+import { useDeleteContent } from "../hooks/useDeleteContent";
+import { useDeleteLearningPath } from "../hooks/useDeleteLearningPath";
+import { useLearningPath } from "../hooks/useLearningPath";
 import { useLearningPaths } from "../hooks/useLearningPaths";
 import { useRecommendedPaths } from "../hooks/useRecommendedPaths";
+import { useUpdateContent } from "../hooks/useUpdateContent";
+import { useUpdateLearningPath } from "../hooks/useUpdateLearningPath";
 import { CONTENT_EXTENSIONS, CONTENT_MAX_UPLOAD_MB } from "../lib/contentUploadConstraints";
 import { ApiError } from "../api/client";
-import type { ContentKind, CriterionKey } from "../types/content";
+import type { ContentKind, ContentResponse, CriterionKey } from "../types/content";
+import type { LearningPathSummary } from "../types/learningPath";
 
 type LibraryTab = "trilhas" | "materiais" | "andamento";
 
@@ -61,10 +67,26 @@ export default function LibraryPage() {
   );
 }
 
+type TrailFormMode = { mode: "create" } | { mode: "edit"; path: LearningPathSummary };
+
 function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
-  const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState<TrailFormMode | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const recommended = useRecommendedPaths();
   const paths = useLearningPaths();
+  const deleteTrail = useDeleteLearningPath();
+
+  const handleDelete = async (path: LearningPathSummary) => {
+    if (!window.confirm(`Excluir a trilha "${path.title}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await deleteTrail.mutateAsync(path.id);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Erro ao excluir trilha.");
+    }
+  };
 
   return (
     <>
@@ -86,12 +108,26 @@ function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
 
       {isAdmin && (
         <div style={{ marginBottom: 16 }}>
-          <button type="button" className="btn btn-secondary" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Cancelar" : "Nova trilha"}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setFormMode((m) => (m ? null : { mode: "create" }))}
+          >
+            {formMode ? "Cancelar" : "Nova trilha"}
           </button>
         </div>
       )}
-      {isAdmin && showForm && <NewTrailForm onDone={() => setShowForm(false)} />}
+      {isAdmin && actionError && (
+        <div style={{ marginBottom: 16 }}>
+          <ErrorBanner>{actionError}</ErrorBanner>
+        </div>
+      )}
+      {isAdmin && formMode && (
+        <TrailForm
+          onDone={() => setFormMode(null)}
+          editing={formMode.mode === "edit" ? formMode.path : undefined}
+        />
+      )}
 
       {paths.isLoading && <p className="page-subtitle">Carregando...</p>}
       {paths.isError && <p className="error-text">Não foi possível carregar as trilhas.</p>}
@@ -111,8 +147,36 @@ function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
               key={path.id}
               to={`/biblioteca/trilhas/${path.id}`}
               className="card"
-              style={{ padding: 0, overflow: "hidden", color: "inherit", textDecoration: "none" }}
+              style={{ position: "relative", padding: 0, overflow: "hidden", color: "inherit", textDecoration: "none" }}
             >
+              {isAdmin && (
+                <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 4, zIndex: 1 }}>
+                  <button
+                    type="button"
+                    title="Editar trilha"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setFormMode({ mode: "edit", path });
+                    }}
+                    style={cardActionButtonStyle}
+                  >
+                    <Icon name="edit" size={18} color="var(--gerad-navy)" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Excluir trilha"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleDelete(path);
+                    }}
+                    style={cardActionButtonStyle}
+                  >
+                    <Icon name="delete" size={18} color="var(--gerad-navy)" />
+                  </button>
+                </div>
+              )}
               <div
                 style={{
                   height: 120,
@@ -146,14 +210,37 @@ function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function NewTrailForm({ onDone }: { onDone: () => void }) {
+const cardActionButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 32,
+  height: 32,
+  borderRadius: "50%",
+  border: "1px solid var(--border-secondary)",
+  background: "var(--background-primary)",
+  cursor: "pointer",
+};
+
+function TrailForm({ onDone, editing }: { onDone: () => void; editing?: LearningPathSummary }) {
   const content = useContentLibrary();
   const createPath = useCreateLearningPath();
+  const updatePath = useUpdateLearningPath();
+  const editingDetail = useLearningPath(editing?.id ?? "");
 
-  const [title, setTitle] = useState("");
-  const [criterionKey, setCriterionKey] = useState<CriterionKey | "">("");
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [criterionKey, setCriterionKey] = useState<CriterionKey | "">(editing?.criterion_key ?? "");
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
+  const [itemsLoaded, setItemsLoaded] = useState(!editing);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (editing && editingDetail.data && !itemsLoaded) {
+      const sortedItems = [...editingDetail.data.items].sort((a, b) => a.order_index - b.order_index);
+      setSelectedContentIds(sortedItems.map((item) => item.content.id));
+      setItemsLoaded(true);
+    }
+  }, [editing, editingDetail.data, itemsLoaded]);
 
   const toggleContent = (contentId: string) => {
     setSelectedContentIds((current) =>
@@ -161,21 +248,28 @@ function NewTrailForm({ onDone }: { onDone: () => void }) {
     );
   };
 
+  const isPending = editing ? updatePath.isPending : createPath.isPending;
+
   const handleSubmit = async () => {
     setError(null);
     if (!title.trim()) {
       setError("Informe um título para a trilha.");
       return;
     }
+    const payload = {
+      title,
+      criterion_key: criterionKey || undefined,
+      items: selectedContentIds.map((contentId, index) => ({ content_id: contentId, order_index: index })),
+    };
     try {
-      await createPath.mutateAsync({
-        title,
-        criterion_key: criterionKey || undefined,
-        items: selectedContentIds.map((contentId, index) => ({ content_id: contentId, order_index: index })),
-      });
+      if (editing) {
+        await updatePath.mutateAsync({ id: editing.id, payload });
+      } else {
+        await createPath.mutateAsync(payload);
+      }
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao criar trilha.");
+      setError(err instanceof ApiError ? err.message : `Erro ao ${editing ? "salvar" : "criar"} trilha.`);
     }
   };
 
@@ -226,28 +320,58 @@ function NewTrailForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 6 }}>
-        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={createPath.isPending}>
-          {createPath.isPending ? "Criando..." : "Criar trilha"}
+        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={isPending}>
+          {isPending ? "Salvando..." : editing ? "Salvar alterações" : "Criar trilha"}
         </button>
       </div>
     </div>
   );
 }
 
+type MaterialFormMode = { mode: "create" } | { mode: "edit"; item: ContentResponse };
+
 function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
-  const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState<MaterialFormMode | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const content = useContentLibrary();
+  const deleteMaterial = useDeleteContent();
+
+  const handleDelete = async (item: ContentResponse) => {
+    if (!window.confirm(`Excluir o material "${item.title}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await deleteMaterial.mutateAsync(item.id);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Erro ao excluir material.");
+    }
+  };
 
   return (
     <>
       {isAdmin && (
         <div style={{ marginBottom: 16 }}>
-          <button type="button" className="btn btn-secondary" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Cancelar" : "Adicionar material"}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setFormMode((m) => (m ? null : { mode: "create" }))}
+          >
+            {formMode ? "Cancelar" : "Adicionar material"}
           </button>
         </div>
       )}
-      {isAdmin && showForm && <NewMaterialForm onDone={() => setShowForm(false)} />}
+      {isAdmin && actionError && (
+        <div style={{ marginBottom: 16 }}>
+          <ErrorBanner>{actionError}</ErrorBanner>
+        </div>
+      )}
+      {isAdmin && formMode && (
+        <MaterialForm
+          onDone={() => setFormMode(null)}
+          editing={formMode.mode === "edit" ? formMode.item : undefined}
+        />
+      )}
 
       {content.isLoading && <p className="page-subtitle">Carregando...</p>}
       {content.isError && <p className="error-text">Não foi possível carregar os materiais.</p>}
@@ -263,7 +387,31 @@ function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
       {content.data && content.data.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 }}>
           {content.data.map((item) => (
-            <div key={item.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              key={item.id}
+              className="card"
+              style={{ position: "relative", display: "flex", flexDirection: "column", gap: 10 }}
+            >
+              {isAdmin && (
+                <div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 4 }}>
+                  <button
+                    type="button"
+                    title="Editar material"
+                    onClick={() => setFormMode({ mode: "edit", item })}
+                    style={cardActionButtonStyle}
+                  >
+                    <Icon name="edit" size={18} color="var(--gerad-navy)" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Excluir material"
+                    onClick={() => void handleDelete(item)}
+                    style={cardActionButtonStyle}
+                  >
+                    <Icon name="delete" size={18} color="var(--gerad-navy)" />
+                  </button>
+                </div>
+              )}
               <Icon name={item.kind === "FILE" ? "description" : "link"} size={28} color="var(--gerad-navy)" />
               {item.criterion_key && (
                 <span className="pill" style={{ alignSelf: "flex-start", height: "auto", padding: "3px 10px" }}>
@@ -291,17 +439,20 @@ function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function NewMaterialForm({ onDone }: { onDone: () => void }) {
+function MaterialForm({ onDone, editing }: { onDone: () => void; editing?: ContentResponse }) {
   const createContent = useCreateContent();
+  const updateContent = useUpdateContent();
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [criterionKey, setCriterionKey] = useState<CriterionKey | "">("");
-  const [kind, setKind] = useState<ContentKind>("LINK");
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [criterionKey, setCriterionKey] = useState<CriterionKey | "">(editing?.criterion_key ?? "");
+  const [kind, setKind] = useState<ContentKind>(editing?.kind ?? "LINK");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [externalUrl, setExternalUrl] = useState("");
+  const [externalUrl, setExternalUrl] = useState(editing?.external_url ?? "");
   const [error, setError] = useState<string | null>(null);
+
+  const isPending = editing ? updateContent.isPending : createContent.isPending;
 
   const handleSubmit = async () => {
     setError(null);
@@ -309,7 +460,7 @@ function NewMaterialForm({ onDone }: { onDone: () => void }) {
       setError("Informe um título para o material.");
       return;
     }
-    if (kind === "FILE" && !file) {
+    if (!editing && kind === "FILE" && !file) {
       setError("Selecione um arquivo PDF.");
       return;
     }
@@ -318,17 +469,30 @@ function NewMaterialForm({ onDone }: { onDone: () => void }) {
       return;
     }
     try {
-      await createContent.mutateAsync({
-        title,
-        description: description || undefined,
-        criterion_key: criterionKey || undefined,
-        kind,
-        file: kind === "FILE" ? file ?? undefined : undefined,
-        external_url: kind === "LINK" ? externalUrl : undefined,
-      });
+      if (editing) {
+        await updateContent.mutateAsync({
+          id: editing.id,
+          payload: {
+            title,
+            description: description || undefined,
+            criterion_key: criterionKey || undefined,
+            file: kind === "FILE" ? file ?? undefined : undefined,
+            external_url: kind === "LINK" ? externalUrl : undefined,
+          },
+        });
+      } else {
+        await createContent.mutateAsync({
+          title,
+          description: description || undefined,
+          criterion_key: criterionKey || undefined,
+          kind,
+          file: kind === "FILE" ? file ?? undefined : undefined,
+          external_url: kind === "LINK" ? externalUrl : undefined,
+        });
+      }
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao cadastrar material.");
+      setError(err instanceof ApiError ? err.message : `Erro ao ${editing ? "salvar" : "cadastrar"} material.`);
     }
   };
 
@@ -369,20 +533,24 @@ function NewMaterialForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="form-field">
           <label>Tipo de material</label>
-          <div className="input-type-choice">
-            <button type="button" className={kind === "LINK" ? "active" : ""} onClick={() => setKind("LINK")}>
-              Link externo
-            </button>
-            <button type="button" className={kind === "FILE" ? "active" : ""} onClick={() => setKind("FILE")}>
-              Arquivo PDF
-            </button>
-          </div>
+          {editing ? (
+            <span className="page-subtitle">{kind === "FILE" ? "Arquivo PDF" : "Link externo"}</span>
+          ) : (
+            <div className="input-type-choice">
+              <button type="button" className={kind === "LINK" ? "active" : ""} onClick={() => setKind("LINK")}>
+                Link externo
+              </button>
+              <button type="button" className={kind === "FILE" ? "active" : ""} onClick={() => setKind("FILE")}>
+                Arquivo PDF
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {kind === "FILE" ? (
         <div className="form-field">
-          <label>Arquivo</label>
+          <label>Arquivo{editing ? " (deixe em branco para manter o atual)" : ""}</label>
           <FileDropzone
             extensions={CONTENT_EXTENSIONS}
             maxUploadMb={CONTENT_MAX_UPLOAD_MB}
@@ -413,13 +581,8 @@ function NewMaterialForm({ onDone }: { onDone: () => void }) {
       )}
 
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 6 }}>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={handleSubmit}
-          disabled={createContent.isPending}
-        >
-          {createContent.isPending ? "Enviando..." : "Adicionar material"}
+        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={isPending}>
+          {isPending ? "Salvando..." : editing ? "Salvar alterações" : "Adicionar material"}
         </button>
       </div>
     </div>

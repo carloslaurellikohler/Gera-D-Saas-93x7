@@ -23,3 +23,4 @@ class ContentResponse(BaseModel):
     external_url: str | None
     uploaded_by_id: uuid.UUID | None
     created_at: datetime
+    updated_at: datetime | None = None

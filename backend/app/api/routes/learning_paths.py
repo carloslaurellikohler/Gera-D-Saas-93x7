@@ -20,6 +20,7 @@ from app.schemas.learning_path import (
     EnrollmentResponse,
     LearningPathDetail,
     LearningPathSummary,
+    UpdateLearningPathRequest,
 )
 from app.services.learning_path_service import (
     LearningPathItemNotFoundError,
@@ -73,6 +74,22 @@ def get_learning_path(
     current_user: User = Depends(get_current_user),
 ):
     detail = service.get_detail(learning_path_id, current_user=current_user)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Trilha não encontrada.")
+    return detail
+
+
+@router.put("/{learning_path_id}", response_model=LearningPathDetail)
+def update_learning_path(
+    learning_path_id: uuid.UUID,
+    request: UpdateLearningPathRequest,
+    service: LearningPathService = Depends(get_learning_path_service),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        detail = service.update(learning_path_id, request=request)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if detail is None:
         raise HTTPException(status_code=404, detail="Trilha não encontrada.")
     return detail

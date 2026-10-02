@@ -68,6 +68,48 @@ class ContentService:
         )
         return self.repo.create(content)
 
+    def update(
+        self,
+        content_id: uuid.UUID,
+        *,
+        title: str,
+        description: str | None,
+        criterion_key: CriterionKey | None,
+        file_name: str | None,
+        file_content: bytes | None,
+        external_url: str | None,
+    ) -> Content | None:
+        content = self.repo.get(content_id)
+        if content is None:
+            return None
+
+        resolved_file_path = content.file_path
+        resolved_url = content.external_url
+
+        if content.kind == ContentKind.FILE:
+            if file_name and file_content is not None:
+                validate_content_upload(
+                    file_name=file_name, content=file_content, max_upload_mb=self.max_upload_mb
+                )
+                safe_name = sanitize_filename(file_name)
+                new_path = self.storage.save_bytes(f"content/{content_id}/{safe_name}", file_content)
+                if content.file_path and content.file_path != new_path:
+                    self.storage.delete(content.file_path)
+                resolved_file_path = new_path
+        else:
+            if not external_url:
+                raise ValueError("URL externa é obrigatória para materiais do tipo LINK.")
+            resolved_url = external_url
+
+        return self.repo.update(
+            content_id,
+            title=title,
+            description=description,
+            criterion_key=criterion_key,
+            file_path=resolved_file_path,
+            external_url=resolved_url,
+        )
+
     def list_all(self, *, criterion_key: CriterionKey | None = None) -> list[Content]:
         return self.repo.list(criterion_key=criterion_key)
 

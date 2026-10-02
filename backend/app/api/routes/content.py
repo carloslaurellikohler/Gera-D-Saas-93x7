@@ -75,6 +75,39 @@ def get_content(
     return content
 
 
+@router.put("/{content_id}", response_model=ContentResponse)
+def update_content(
+    content_id: uuid.UUID,
+    title: str = Form(...),
+    description: str | None = Form(None),
+    criterion_key: CriterionKey | None = Form(None),
+    file: UploadFile | None = File(None),
+    external_url: str | None = Form(None),
+    service: ContentService = Depends(get_content_service),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        content = service.update(
+            content_id,
+            title=title,
+            description=description,
+            criterion_key=criterion_key,
+            file_name=file.filename if file else None,
+            file_content=file.file.read() if file else None,
+            external_url=external_url,
+        )
+    except (
+        UnsupportedContentFileTypeError,
+        ContentFileTooLargeError,
+        CorruptedContentFileError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if content is None:
+        raise HTTPException(status_code=404, detail="Material não encontrado.")
+    return content
+
+
 @router.delete("/{content_id}", status_code=204)
 def delete_content(
     content_id: uuid.UUID,

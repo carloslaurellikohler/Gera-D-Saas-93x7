@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.constants import CriterionKey
@@ -38,6 +38,41 @@ class LearningPathRepository:
 
     def get(self, learning_path_id: uuid.UUID) -> LearningPath | None:
         return self.db.get(LearningPath, learning_path_id)
+
+    def update(
+        self,
+        learning_path_id: uuid.UUID,
+        *,
+        title: str,
+        description: str | None,
+        criterion_key: CriterionKey | None,
+        estimated_duration_minutes: int | None,
+        items: list[tuple[uuid.UUID, int]],
+    ) -> LearningPath | None:
+        learning_path = self.get(learning_path_id)
+        if learning_path is None:
+            return None
+
+        learning_path.title = title
+        learning_path.description = description
+        learning_path.criterion_key = criterion_key
+        learning_path.estimated_duration_minutes = estimated_duration_minutes
+
+        self.db.execute(
+            delete(LearningPathItem).where(LearningPathItem.learning_path_id == learning_path_id)
+        )
+        self.db.flush()
+        for content_id, order_index in items:
+            self.db.add(
+                LearningPathItem(
+                    learning_path_id=learning_path_id,
+                    content_id=content_id,
+                    order_index=order_index,
+                )
+            )
+        self.db.commit()
+        self.db.refresh(learning_path)
+        return learning_path
 
     def list(self) -> list[LearningPath]:
         stmt = select(LearningPath).order_by(LearningPath.created_at.desc())
