@@ -6,7 +6,7 @@ import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
 import { useCreateAnalysis } from "../hooks/useCreateAnalysis";
 import type { Objective } from "../types/analysis";
-import type { InputTypeChoice } from "../lib/uploadConstraints";
+import { EXTENSIONS_BY_CHOICE, MAX_UPLOAD_MB, type InputTypeChoice } from "../lib/uploadConstraints";
 import { ApiError } from "../api/client";
 
 export default function NewAnalysisPage() {
@@ -138,7 +138,8 @@ export default function NewAnalysisPage() {
         <div className="form-field">
           <label>Arquivo</label>
           <FileDropzone
-            choice={inputChoice}
+            extensions={EXTENSIONS_BY_CHOICE[inputChoice]}
+            maxUploadMb={MAX_UPLOAD_MB}
             file={file}
             onFileSelected={(selected, error) => {
               setFile(selected);

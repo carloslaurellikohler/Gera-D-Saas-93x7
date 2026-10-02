@@ -33,3 +33,24 @@ ALLOWED_MIME_TYPES: set[str] = {
     "video/mp4",  # .mp4
     "audio/mp4",  # alguns clientes reportam .mp4 de áudio assim
 }
+
+
+class CriterionKey(str, enum.Enum):
+    """Espelha CriterionScore.key da engine (scores_by_criterion), por duplicação
+    intencional — a engine nunca é importada fora de engine_integration/. Usado para
+    casar materiais/trilhas (Fase 5) com os critérios de pior desempenho do usuário."""
+
+    POSICIONAMENTO = "posicionamento"
+    CONEXAO = "conexao"
+    SONDAGEM = "sondagem"
+    DIRECIONAMENTO = "direcionamento"
+    ENCAMINHAMENTO = "encaminhamento"
+    EFICIENCIA_CONDUCAO = "eficiencia_conducao"
+
+
+# Formatos aceitos para materiais de apoio da biblioteca (Fase 5) — distinto de
+# ALLOWED_EXTENSIONS (uploads de análise). v1 restrito a PDF; vídeo-aula entra como
+# external_url (kind=LINK), não upload direto.
+ALLOWED_CONTENT_EXTENSIONS: dict[str, str] = {
+    ".pdf": "pdf",
+}

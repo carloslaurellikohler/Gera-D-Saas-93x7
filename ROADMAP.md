@@ -88,15 +88,29 @@ não são aceitos — limitação da engine, comunicada como erro 4xx claro, nun
   conectada a dados reais via `recharts` (`RadarChart` + `LineChart`), com `EmptyState` para
   os casos sem análises concluídas no período.
 
+- **Fase 5 — Biblioteca de conteúdo + trilhas de treinamento** — tabelas `Content`
+  (material de apoio: PDF via storage local ou link externo) e `LearningPath` +
+  `LearningPathItem` (trilha ↔ materiais, muitos-para-muitos com ordem). Escrita
+  (`POST`/`DELETE` em `/content` e `/learning-paths`) restrita a ADMIN via
+  `require_role` (primeira feature a consumir essa dependency); leitura liberada a
+  qualquer usuário autenticado. `DELETE /content/{id}` recusa com 409 enquanto o
+  material estiver referenciado por alguma trilha. Recomendação (`GET
+  /learning-paths/recommended`) casa trilhas com os critérios de pior média nas
+  análises `COMPLETED` do próprio usuário logado (via `scores_by_criterion`, reaproveitando
+  `MetricsRepository`) — nunca pelos campos de texto livre da engine
+  (`training_recommendation`/`risks`, que não garantem corresponder a um dos 6 critérios
+  enumerados) e nunca agregada para ADMIN (recomendação é sempre pessoal, diferente do
+  padrão Dashboard/Métricas). Tela `LibraryPage` (`/biblioteca`, já existia como mock
+  estático) conectada a dados reais, mantendo as 3 abas (trilhas/materiais/andamento);
+  aba "Em andamento" (progresso do usuário) fica fora desta rodada — exigiria tabela e
+  endpoints próprios, fora do escopo combinado para a Fase 5.
+
 ## Roadmap das fases seguintes
 
 Cada fase deve começar com uma nova rodada de exploração + planejamento antes de ser
 implementada — os itens abaixo são a visão de alto nível, não um plano de implementação
 pronto.
 
-- **Fase 5 — Biblioteca de conteúdo + trilhas de treinamento**: novas tabelas `Content`,
-  `LearningPath`, upload de materiais, conectando com os pontos de desenvolvimento e
-  recomendações de T&D dos relatórios.
 - **Fase 6 — Assistente de IA (chatbot RAG)**: reaproveita o padrão `ChatOpenAI` do engine,
   mas como módulo novo e paralelo — hoje não existe infraestrutura de RAG/vector store no
   projeto, será construída do zero.

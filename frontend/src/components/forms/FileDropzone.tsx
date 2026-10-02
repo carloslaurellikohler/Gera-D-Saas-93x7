@@ -1,18 +1,13 @@
 import { useRef, useState } from "react";
-import {
-  EXTENSIONS_BY_CHOICE,
-  isExtensionAllowed,
-  MAX_UPLOAD_MB,
-  type InputTypeChoice,
-} from "../../lib/uploadConstraints";
 
 interface Props {
-  choice: InputTypeChoice;
+  extensions: string[];
+  maxUploadMb: number;
   file: File | null;
   onFileSelected: (file: File | null, error: string | null) => void;
 }
 
-export default function FileDropzone({ choice, file, onFileSelected }: Props) {
+export default function FileDropzone({ extensions, maxUploadMb, file, onFileSelected }: Props) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -21,15 +16,13 @@ export default function FileDropzone({ choice, file, onFileSelected }: Props) {
       onFileSelected(null, null);
       return;
     }
-    if (!isExtensionAllowed(selected.name, choice)) {
-      onFileSelected(
-        null,
-        `Formato não suportado. Aceitos para ${choice}: ${EXTENSIONS_BY_CHOICE[choice].join(", ")}.`,
-      );
+    const lowerName = selected.name.toLowerCase();
+    if (!extensions.some((ext) => lowerName.endsWith(ext))) {
+      onFileSelected(null, `Formato não suportado. Aceitos: ${extensions.join(", ")}.`);
       return;
     }
-    if (selected.size > MAX_UPLOAD_MB * 1024 * 1024) {
-      onFileSelected(null, `Arquivo maior que o limite de ${MAX_UPLOAD_MB}MB.`);
+    if (selected.size > maxUploadMb * 1024 * 1024) {
+      onFileSelected(null, `Arquivo maior que o limite de ${maxUploadMb}MB.`);
       return;
     }
     onFileSelected(selected, null);
@@ -53,7 +46,7 @@ export default function FileDropzone({ choice, file, onFileSelected }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept={EXTENSIONS_BY_CHOICE[choice].join(",")}
+        accept={extensions.join(",")}
         style={{ display: "none" }}
         onChange={(e) => validateAndSet(e.target.files?.[0])}
       />
@@ -65,7 +58,7 @@ export default function FileDropzone({ choice, file, onFileSelected }: Props) {
         <p>
           Arraste seu arquivo aqui ou clique para selecionar
           <br />
-          <small>Formatos aceitos: {EXTENSIONS_BY_CHOICE[choice].join(", ")}</small>
+          <small>Formatos aceitos: {extensions.join(", ")}</small>
         </p>
       )}
     </div>

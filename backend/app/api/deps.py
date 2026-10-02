@@ -13,12 +13,16 @@ from app.db.session import get_db
 from app.engine_integration.adapter import EngineAdapter
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.content_repository import ContentRepository
 from app.repositories.dashboard_repository import DashboardRepository
+from app.repositories.learning_path_repository import LearningPathRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
 from app.services.auth_service import AuthService
+from app.services.content_service import ContentService
 from app.services.dashboard_service import DashboardService
+from app.services.learning_path_service import LearningPathService
 from app.services.metrics_service import MetricsService
 from app.storage.local_storage import LocalDiskStorage
 
@@ -46,6 +50,24 @@ def get_dashboard_service(db: Session = Depends(get_db)) -> DashboardService:
 
 def get_metrics_service(db: Session = Depends(get_db)) -> MetricsService:
     return MetricsService(repo=MetricsRepository(db))
+
+
+def get_content_service(
+    db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+) -> ContentService:
+    return ContentService(
+        repo=ContentRepository(db),
+        storage=LocalDiskStorage(settings.STORAGE_DIR),
+        max_upload_mb=settings.MAX_UPLOAD_MB,
+    )
+
+
+def get_learning_path_service(db: Session = Depends(get_db)) -> LearningPathService:
+    return LearningPathService(
+        repo=LearningPathRepository(db),
+        content_repo=ContentRepository(db),
+        metrics_repo=MetricsRepository(db),
+    )
 
 
 def get_current_user(

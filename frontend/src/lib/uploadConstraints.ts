@@ -9,8 +9,3 @@ export const EXTENSIONS_BY_CHOICE: Record<InputTypeChoice, string[]> = {
 };
 
 export const MAX_UPLOAD_MB = 100;
-
-export function isExtensionAllowed(fileName: string, choice: InputTypeChoice): boolean {
-  const lower = fileName.toLowerCase();
-  return EXTENSIONS_BY_CHOICE[choice].some((ext) => lower.endsWith(ext));
-}

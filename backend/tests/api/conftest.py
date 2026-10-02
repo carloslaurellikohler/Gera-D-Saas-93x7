@@ -7,15 +7,20 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_analysis_service
+from app.api.deps import get_analysis_service, get_content_service, get_learning_path_service
 from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.main import app
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.content_repository import ContentRepository
+from app.repositories.learning_path_repository import LearningPathRepository
+from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
+from app.services.content_service import ContentService
+from app.services.learning_path_service import LearningPathService
 from app.storage.local_storage import LocalDiskStorage
 
 
@@ -30,9 +35,26 @@ def api_service(db_session, tmp_path: Path) -> AnalysisService:
 
 
 @pytest.fixture()
-def _overrides(api_service, db_session, mocker):
+def content_service(db_session, tmp_path: Path) -> ContentService:
+    storage = LocalDiskStorage(tmp_path / "content_storage")
+    return ContentService(repo=ContentRepository(db_session), storage=storage, max_upload_mb=10)
+
+
+@pytest.fixture()
+def learning_path_service(db_session) -> LearningPathService:
+    return LearningPathService(
+        repo=LearningPathRepository(db_session),
+        content_repo=ContentRepository(db_session),
+        metrics_repo=MetricsRepository(db_session),
+    )
+
+
+@pytest.fixture()
+def _overrides(api_service, content_service, learning_path_service, db_session, mocker):
     mocker.patch("app.api.routes.analyses.process_analysis_task.delay")
     app.dependency_overrides[get_analysis_service] = lambda: api_service
+    app.dependency_overrides[get_content_service] = lambda: content_service
+    app.dependency_overrides[get_learning_path_service] = lambda: learning_path_service
     app.dependency_overrides[get_db] = lambda: db_session
     yield
     app.dependency_overrides.clear()

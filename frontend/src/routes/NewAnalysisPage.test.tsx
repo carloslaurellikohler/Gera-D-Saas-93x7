@@ -63,7 +63,7 @@ describe("NewAnalysisPage", () => {
     // Usa fireEvent (não userEvent.upload) porque userEvent respeita o atributo `accept`
     // do input e filtraria o arquivo antes mesmo do onChange disparar — isso mascararia
     // o teste em vez de exercitar validate_upload-equivalente no cliente (services/validation
-    // no backend; aqui, isExtensionAllowed em lib/uploadConstraints.ts).
+    // no backend; aqui, a validação de extensão em components/forms/FileDropzone.tsx).
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     const badFile = new File(["fake audio"], "audio.mp3", { type: "audio/mpeg" });
     Object.defineProperty(input, "files", { value: [badFile] });

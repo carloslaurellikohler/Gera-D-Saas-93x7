@@ -1,0 +1,127 @@
+"""Orquestração de trilhas de treinamento (LearningPath, Fase 5). A recomendação lê
+scores_by_criterion (via MetricsRepository, já existente) para identificar os critérios
+com pior média nas análises recentes do próprio usuário — nunca os campos de texto
+livre da engine (training_recommendation/risks), que não garantem corresponder a um
+dos 6 critérios enumerados. Recomendação é sempre pessoal, nunca agregada (mesmo para
+ADMIN) — diferente do padrão Dashboard/Métricas."""
+
+from __future__ import annotations
+
+import statistics
+import uuid
+from collections import defaultdict
+from datetime import date, timedelta
+
+from app.core.constants import CriterionKey
+from app.models.learning_path import LearningPath
+from app.models.user import User
+from app.repositories.content_repository import ContentRepository
+from app.repositories.learning_path_repository import LearningPathRepository
+from app.repositories.metrics_repository import MetricsRepository
+from app.schemas.content import ContentResponse
+from app.schemas.learning_path import (
+    CreateLearningPathRequest,
+    LearningPathDetail,
+    LearningPathItemResponse,
+    LearningPathSummary,
+)
+
+_RECOMMENDATION_WINDOW_DAYS = 90
+_SCORE_CUTOFF = 7.0
+_CRITERION_VALUES = {key.value for key in CriterionKey}
+
+
+class LearningPathService:
+    def __init__(
+        self,
+        repo: LearningPathRepository,
+        content_repo: ContentRepository,
+        metrics_repo: MetricsRepository,
+    ) -> None:
+        self.repo = repo
+        self.content_repo = content_repo
+        self.metrics_repo = metrics_repo
+
+    def create(self, *, request: CreateLearningPathRequest, created_by: User) -> LearningPathDetail:
+        for item in request.items:
+            if self.content_repo.get(item.content_id) is None:
+                raise ValueError(f"Material {item.content_id} não encontrado.")
+
+        learning_path = LearningPath(
+            title=request.title,
+            description=request.description,
+            criterion_key=request.criterion_key,
+            estimated_duration_minutes=request.estimated_duration_minutes,
+            created_by_id=created_by.id,
+        )
+        learning_path = self.repo.create(
+            learning_path, items=[(i.content_id, i.order_index) for i in request.items]
+        )
+        return self.get_detail(learning_path.id)  # type: ignore[return-value]
+
+    def get_detail(self, learning_path_id: uuid.UUID) -> LearningPathDetail | None:
+        learning_path = self.repo.get(learning_path_id)
+        if learning_path is None:
+            return None
+        rows = self.repo.list_items(learning_path_id)
+        return LearningPathDetail(
+            id=learning_path.id,
+            title=learning_path.title,
+            description=learning_path.description,
+            criterion_key=learning_path.criterion_key,
+            estimated_duration_minutes=learning_path.estimated_duration_minutes,
+            created_at=learning_path.created_at,
+            items=[
+                LearningPathItemResponse(
+                    content=ContentResponse.model_validate(content), order_index=item.order_index
+                )
+                for item, content in rows
+            ],
+        )
+
+    def list_all(self) -> list[LearningPathSummary]:
+        return [self._to_summary(lp) for lp in self.repo.list()]
+
+    def get_recommended(self, *, current_user: User, limit: int = 3) -> list[LearningPathSummary]:
+        since = date.today() - timedelta(days=_RECOMMENDATION_WINDOW_DAYS)
+        rows = self.metrics_repo.completed_rows(user_id=current_user.id, since=since)
+        if not rows:
+            return []
+
+        averages = _criterion_averages(rows)
+        weak_keys = [
+            CriterionKey(key)
+            for key, avg in sorted(averages.items(), key=lambda kv: kv[1])
+            if avg < _SCORE_CUTOFF and key in _CRITERION_VALUES
+        ]
+        if not weak_keys:
+            return []
+
+        candidates = self.repo.list_by_criterion_keys(weak_keys)
+        order = {key: idx for idx, key in enumerate(weak_keys)}
+        candidates.sort(key=lambda lp: order[lp.criterion_key])
+        return [self._to_summary(lp) for lp in candidates[:limit]]
+
+    def delete(self, learning_path_id: uuid.UUID) -> None:
+        self.repo.delete(learning_path_id)
+
+    def _to_summary(self, learning_path: LearningPath) -> LearningPathSummary:
+        return LearningPathSummary(
+            id=learning_path.id,
+            title=learning_path.title,
+            description=learning_path.description,
+            criterion_key=learning_path.criterion_key,
+            estimated_duration_minutes=learning_path.estimated_duration_minutes,
+            item_count=self.repo.count_items(learning_path.id),
+            created_at=learning_path.created_at,
+        )
+
+
+def _criterion_averages(rows) -> dict[str, float]:
+    scores: dict[str, list[float]] = defaultdict(list)
+    for _, result in rows:
+        for item in (result or {}).get("scores_by_criterion", []):
+            key, score = item.get("key"), item.get("score")
+            if key is not None and score is not None:
+                scores[key].append(score)
+    return {key: statistics.mean(values) for key, values in scores.items()}
