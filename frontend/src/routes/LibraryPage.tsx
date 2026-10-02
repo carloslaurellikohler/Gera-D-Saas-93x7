@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
 import FileDropzone from "../components/forms/FileDropzone";
+import InProgressTab from "../components/library/InProgressTab";
 import { useContentLibrary } from "../hooks/useContentLibrary";
 import { useCreateContent } from "../hooks/useCreateContent";
 import { useCreateLearningPath } from "../hooks/useCreateLearningPath";
@@ -54,7 +56,7 @@ export default function LibraryPage() {
 
       {tab === "trilhas" && <TrailsTab isAdmin={isAdmin} />}
       {tab === "materiais" && <MaterialsTab isAdmin={isAdmin} />}
-      {tab === "andamento" && <p className="page-subtitle">Você ainda não iniciou nenhuma trilha.</p>}
+      {tab === "andamento" && <InProgressTab />}
     </div>
   );
 }
@@ -105,7 +107,12 @@ function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
       {paths.data && paths.data.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 }}>
           {paths.data.map((path) => (
-            <div key={path.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <Link
+              key={path.id}
+              to={`/biblioteca/trilhas/${path.id}`}
+              className="card"
+              style={{ padding: 0, overflow: "hidden", color: "inherit", textDecoration: "none" }}
+            >
               <div
                 style={{
                   height: 120,
@@ -131,7 +138,7 @@ function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
                   {path.estimated_duration_minutes ? ` · ${path.estimated_duration_minutes} min` : ""}
                 </span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

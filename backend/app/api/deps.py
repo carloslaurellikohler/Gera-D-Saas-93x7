@@ -15,6 +15,7 @@ from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.content_repository import ContentRepository
 from app.repositories.dashboard_repository import DashboardRepository
+from app.repositories.learning_path_enrollment_repository import LearningPathEnrollmentRepository
 from app.repositories.learning_path_repository import LearningPathRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
@@ -67,6 +68,7 @@ def get_learning_path_service(db: Session = Depends(get_db)) -> LearningPathServ
         repo=LearningPathRepository(db),
         content_repo=ContentRepository(db),
         metrics_repo=MetricsRepository(db),
+        enrollment_repo=LearningPathEnrollmentRepository(db),
     )
 
 

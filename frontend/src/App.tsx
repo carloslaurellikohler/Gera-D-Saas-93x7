@@ -7,6 +7,7 @@ import ResultPage from "./routes/ResultPage";
 import LoginPage from "./routes/LoginPage";
 import MetricsPage from "./routes/MetricsPage";
 import LibraryPage from "./routes/LibraryPage";
+import LearningPathDetailPage from "./routes/LearningPathDetailPage";
 import AssistantPage from "./routes/AssistantPage";
 import AdminDashboardPage from "./routes/AdminDashboardPage";
 import CalibrationPage from "./routes/CalibrationPage";
@@ -75,6 +76,14 @@ function App() {
           element={
             <AuthenticatedShell>
               <LibraryPage />
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/biblioteca/trilhas/:id"
+          element={
+            <AuthenticatedShell>
+              <LearningPathDetailPage />
             </AuthenticatedShell>
           }
         />

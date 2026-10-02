@@ -683,6 +683,21 @@ h3 {
   color: #57000e;
 }
 
+/* ============================= Progress bar (trilhas) ============================= */
+
+.ui-progress-bar {
+  height: 8px;
+  border-radius: var(--corner-full);
+  background: var(--background-brand-secondary-n5);
+  overflow: hidden;
+}
+
+.ui-progress-bar-fill {
+  height: 100%;
+  background: var(--gerad-navy);
+  transition: width 0.2s ease;
+}
+
 /* ============================= Stepper (processing) ============================= */
 
 .ui-stepper {

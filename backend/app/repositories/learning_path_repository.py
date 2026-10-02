@@ -58,6 +58,13 @@ class LearningPathRepository:
         )
         return list(self.db.execute(stmt).all())
 
+    def get_item(self, *, learning_path_id: uuid.UUID, item_id: uuid.UUID) -> LearningPathItem | None:
+        stmt = select(LearningPathItem).where(
+            LearningPathItem.id == item_id,
+            LearningPathItem.learning_path_id == learning_path_id,
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def count_items(self, learning_path_id: uuid.UUID) -> int:
         stmt = (
             select(func.count())

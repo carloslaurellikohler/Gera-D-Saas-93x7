@@ -12,8 +12,10 @@ from app.schemas.content import ContentResponse
 
 
 class LearningPathItemResponse(BaseModel):
+    id: uuid.UUID
     content: ContentResponse
     order_index: int
+    completed: bool = False
 
 
 class LearningPathSummary(BaseModel):
@@ -34,6 +36,25 @@ class LearningPathDetail(BaseModel):
     estimated_duration_minutes: int | None
     created_at: datetime
     items: list[LearningPathItemResponse]
+
+
+class EnrollmentResponse(BaseModel):
+    learning_path_id: uuid.UUID
+    enrolled_at: datetime
+
+
+class EnrolledLearningPathSummary(BaseModel):
+    id: uuid.UUID
+    title: str
+    description: str | None
+    criterion_key: CriterionKey | None
+    estimated_duration_minutes: int | None
+    item_count: int
+    completed_count: int
+    progress_percent: float
+    is_completed: bool
+    enrolled_at: datetime
+    created_at: datetime
 
 
 class CreateLearningPathItem(BaseModel):

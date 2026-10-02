@@ -11,11 +11,17 @@ from app.models.learning_path import LearningPath
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.content_repository import ContentRepository
+from app.repositories.learning_path_enrollment_repository import LearningPathEnrollmentRepository
 from app.repositories.learning_path_repository import LearningPathRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.learning_path import CreateLearningPathItem, CreateLearningPathRequest
-from app.services.learning_path_service import _CRITERION_VALUES, LearningPathService
+from app.services.learning_path_service import (
+    _CRITERION_VALUES,
+    LearningPathItemNotFoundError,
+    LearningPathService,
+    NotEnrolledError,
+)
 
 
 @pytest.fixture()
@@ -38,6 +44,7 @@ def service(db_session) -> LearningPathService:
         repo=LearningPathRepository(db_session),
         content_repo=ContentRepository(db_session),
         metrics_repo=MetricsRepository(db_session),
+        enrollment_repo=LearningPathEnrollmentRepository(db_session),
     )
 
 
@@ -140,3 +147,102 @@ def test_recommended_is_scoped_to_own_analyses_even_for_admin(service, regular_u
     admin_result = service.get_recommended(current_user=admin_user)
 
     assert admin_result == []
+
+
+def _create_path_with_items(service, admin_user, db_session, *, item_count: int):
+    contents = [
+        ContentRepository(db_session).create(
+            Content(title=f"Material {i}", kind=ContentKind.LINK, external_url="https://example.com")
+        )
+        for i in range(item_count)
+    ]
+    request = CreateLearningPathRequest(
+        title="Trilha com itens",
+        items=[
+            CreateLearningPathItem(content_id=content.id, order_index=i)
+            for i, content in enumerate(contents)
+        ],
+    )
+    return service.create(request=request, created_by=admin_user)
+
+
+def test_enroll_returns_none_for_unknown_path(service, regular_user):
+    import uuid
+
+    assert service.enroll(learning_path_id=uuid.uuid4(), user=regular_user) is None
+
+
+def test_enroll_then_list_enrolled_shows_zero_progress(service, admin_user, regular_user, db_session):
+    path = _create_path_with_items(service, admin_user, db_session, item_count=2)
+
+    service.enroll(learning_path_id=path.id, user=regular_user)
+    enrolled = service.list_enrolled(user=regular_user)
+
+    assert len(enrolled) == 1
+    assert enrolled[0].id == path.id
+    assert enrolled[0].completed_count == 0
+    assert enrolled[0].progress_percent == 0.0
+    assert enrolled[0].is_completed is False
+
+
+def test_mark_item_complete_without_enrollment_raises_not_enrolled(
+    service, admin_user, regular_user, db_session
+):
+    path = _create_path_with_items(service, admin_user, db_session, item_count=1)
+
+    with pytest.raises(NotEnrolledError):
+        service.mark_item_complete(learning_path_id=path.id, item_id=path.items[0].id, user=regular_user)
+
+
+def test_mark_item_complete_unknown_item_raises_not_found(service, admin_user, regular_user, db_session):
+    import uuid
+
+    path = _create_path_with_items(service, admin_user, db_session, item_count=1)
+    service.enroll(learning_path_id=path.id, user=regular_user)
+
+    with pytest.raises(LearningPathItemNotFoundError):
+        service.mark_item_complete(learning_path_id=path.id, item_id=uuid.uuid4(), user=regular_user)
+
+
+def test_mark_all_items_complete_marks_path_as_completed(service, admin_user, regular_user, db_session):
+    path = _create_path_with_items(service, admin_user, db_session, item_count=2)
+    service.enroll(learning_path_id=path.id, user=regular_user)
+
+    for item in path.items:
+        service.mark_item_complete(learning_path_id=path.id, item_id=item.id, user=regular_user)
+
+    enrolled = service.list_enrolled(user=regular_user)
+    assert enrolled[0].progress_percent == 100.0
+    assert enrolled[0].is_completed is True
+
+
+def test_unmark_item_complete_reduces_progress(service, admin_user, regular_user, db_session):
+    path = _create_path_with_items(service, admin_user, db_session, item_count=2)
+    service.enroll(learning_path_id=path.id, user=regular_user)
+    for item in path.items:
+        service.mark_item_complete(learning_path_id=path.id, item_id=item.id, user=regular_user)
+
+    service.unmark_item_complete(learning_path_id=path.id, item_id=path.items[0].id, user=regular_user)
+
+    enrolled = service.list_enrolled(user=regular_user)
+    assert enrolled[0].completed_count == 1
+    assert enrolled[0].is_completed is False
+
+
+def test_get_detail_marks_completed_items_for_current_user_only(
+    service, admin_user, regular_user, db_session
+):
+    other_user = UserRepository(db_session).create(
+        User(name="Outro", email="lpso@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+    )
+    path = _create_path_with_items(service, admin_user, db_session, item_count=1)
+    service.enroll(learning_path_id=path.id, user=regular_user)
+    service.mark_item_complete(learning_path_id=path.id, item_id=path.items[0].id, user=regular_user)
+
+    detail_for_owner = service.get_detail(path.id, current_user=regular_user)
+    detail_for_other = service.get_detail(path.id, current_user=other_user)
+    detail_without_user = service.get_detail(path.id)
+
+    assert detail_for_owner.items[0].completed is True
+    assert detail_for_other.items[0].completed is False
+    assert detail_without_user.items[0].completed is False
