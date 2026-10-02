@@ -79,14 +79,21 @@ não são aceitos — limitação da engine, comunicada como erro 4xx claro, nun
   cliente. `AdminDashboardPage` e a seção de KPIs de `DashboardPage` conectadas a esse
   endpoint; gráfico de tendência com `recharts` (nova dependência do frontend).
 
+- **Fase 4 — Evolução de métricas** — endpoint `GET /metrics/evolution?period=30d|90d|6m`
+  (`MetricsService`/`MetricsRepository`, só leitura, mesmo padrão de escopo do dashboard),
+  agregando em Python a partir de linhas cruas `(completed_at, analysis_result)`: radar dos
+  6 critérios comportamentais (período atual vs período anterior equivalente) e tendência
+  semanal de nota geral + Pilar 93 + Pilar 7. Sem dados suficientes é sempre 200 com valores
+  `None`/listas vazias, nunca erro. Tela `MetricsPage` (`/metricas`, já existia como mock)
+  conectada a dados reais via `recharts` (`RadarChart` + `LineChart`), com `EmptyState` para
+  os casos sem análises concluídas no período.
+
 ## Roadmap das fases seguintes
 
 Cada fase deve começar com uma nova rodada de exploração + planejamento antes de ser
 implementada — os itens abaixo são a visão de alto nível, não um plano de implementação
 pronto.
 
-- **Fase 4 — Evolução de métricas**: gráficos temporais e por categoria (ex.: radar dos 6
-  critérios), baseados nos dados já persistidos em `analysis_result` (JSONB).
 - **Fase 5 — Biblioteca de conteúdo + trilhas de treinamento**: novas tabelas `Content`,
   `LearningPath`, upload de materiais, conectando com os pontos de desenvolvimento e
   recomendações de T&D dos relatórios.
