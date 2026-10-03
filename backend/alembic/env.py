@@ -8,9 +8,11 @@ from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models import analysis  # noqa: F401 — garante que o modelo é registrado em Base.metadata
+from app.models import chat_message  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 from app.models import content  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 from app.models import learning_path  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 from app.models import learning_path_enrollment  # noqa: F401 — garante que o modelo é registrado em Base.metadata
+from app.models import methodology_chunk  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 from app.models import user  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 
 # this is the Alembic Config object, which provides

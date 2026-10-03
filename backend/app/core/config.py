@@ -39,6 +39,19 @@ class Settings(BaseSettings):
     SEED_ADMIN_PASSWORD: str | None = None
     SEED_ADMIN_NAME: str = "Administrador"
 
+    # --- Assistente de IA (Fase 6) — distinto de OPENAI_MODEL/OPENAI_TEMPERATURE da
+    # engine (gera_d_engine.config), que usa um modelo mais caro (gpt-6-sol) para o
+    # pipeline pesado de análise. Reaproveita a mesma OPENAI_API_KEY do ambiente.
+    OPENAI_API_KEY: str | None = None
+    ASSISTANT_CHAT_MODEL: str = "gpt-6-luna"
+    ASSISTANT_CHAT_TEMPERATURE: float = 0.3
+    ASSISTANT_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    ASSISTANT_DAILY_MESSAGE_LIMIT: int = 30
+    ASSISTANT_HISTORY_WINDOW: int = 10
+    ASSISTANT_TOP_K_CHUNKS: int = 4
+    ASSISTANT_CHUNK_SIZE: int = 1200
+    ASSISTANT_CHUNK_OVERLAP: int = 200
+
 
 def get_settings() -> Settings:
     return Settings()

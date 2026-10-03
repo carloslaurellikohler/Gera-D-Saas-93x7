@@ -9,10 +9,14 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models import analysis as _analysis_models  # noqa: F401 — registra o modelo em Base.metadata
+from app.models import chat_message as _chat_message_models  # noqa: F401 — registra o modelo em Base.metadata
 from app.models import content as _content_models  # noqa: F401 — registra o modelo em Base.metadata
 from app.models import learning_path as _learning_path_models  # noqa: F401 — registra o modelo em Base.metadata
 from app.models import (  # noqa: F401 — registra o modelo em Base.metadata
     learning_path_enrollment as _learning_path_enrollment_models,
+)
+from app.models import (  # noqa: F401 — registra o modelo em Base.metadata
+    methodology_chunk as _methodology_chunk_models,
 )
 from app.models import user as _user_models  # noqa: F401 — registra o modelo em Base.metadata
 

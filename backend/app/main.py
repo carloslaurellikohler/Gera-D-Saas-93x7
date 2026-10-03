@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import analyses, auth, content, dashboard, health, learning_paths, metrics
+from app.api.routes import analyses, assistant, auth, content, dashboard, health, learning_paths, metrics
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(analyses.router, prefix=settings.API_V1_PREFIX)
+app.include_router(assistant.router, prefix=settings.API_V1_PREFIX)
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(content.router, prefix=settings.API_V1_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)

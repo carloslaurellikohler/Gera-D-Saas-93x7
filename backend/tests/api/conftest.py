@@ -7,19 +7,27 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_analysis_service, get_content_service, get_learning_path_service
+from app.api.deps import (
+    get_analysis_service,
+    get_assistant_service,
+    get_content_service,
+    get_learning_path_service,
+)
 from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.main import app
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.chat_message_repository import ChatMessageRepository
 from app.repositories.content_repository import ContentRepository
 from app.repositories.learning_path_enrollment_repository import LearningPathEnrollmentRepository
 from app.repositories.learning_path_repository import LearningPathRepository
+from app.repositories.methodology_chunk_repository import MethodologyChunkRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
+from app.services.assistant_service import AssistantService
 from app.services.content_service import ContentService
 from app.services.learning_path_service import LearningPathService
 from app.storage.local_storage import LocalDiskStorage
@@ -52,11 +60,28 @@ def learning_path_service(db_session) -> LearningPathService:
 
 
 @pytest.fixture()
-def _overrides(api_service, content_service, learning_path_service, db_session, mocker):
+def assistant_service(db_session) -> AssistantService:
+    chat_model = MagicMock()
+    chat_model.invoke.return_value = MagicMock(content="resposta mockada do assistente")
+    embedding_model = MagicMock()
+    embedding_model.embed_query.return_value = [1.0, 0.0]
+    return AssistantService(
+        chat_repo=ChatMessageRepository(db_session),
+        chunk_repo=MethodologyChunkRepository(db_session),
+        metrics_repo=MetricsRepository(db_session),
+        settings=Settings(ASSISTANT_DAILY_MESSAGE_LIMIT=30),
+        chat_model=chat_model,
+        embedding_model=embedding_model,
+    )
+
+
+@pytest.fixture()
+def _overrides(api_service, content_service, learning_path_service, assistant_service, db_session, mocker):
     mocker.patch("app.api.routes.analyses.process_analysis_task.delay")
     app.dependency_overrides[get_analysis_service] = lambda: api_service
     app.dependency_overrides[get_content_service] = lambda: content_service
     app.dependency_overrides[get_learning_path_service] = lambda: learning_path_service
+    app.dependency_overrides[get_assistant_service] = lambda: assistant_service
     app.dependency_overrides[get_db] = lambda: db_session
     yield
     app.dependency_overrides.clear()

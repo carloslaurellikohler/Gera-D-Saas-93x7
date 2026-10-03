@@ -19,6 +19,10 @@ WORKDIR /app
 
 COPY engine/ /engine/
 COPY backend/ /app/
+# metodologia_93x7.pdf é a única fonte do corpus do Assistente de IA (Fase 6), lido por
+# scripts/ingest_methodology.py — copiado à parte (não docs/ inteiro) para não levar os
+# exemplos/handoff que também vivem em docs/ para a imagem.
+COPY docs/metodologia_93x7.pdf /docs/metodologia_93x7.pdf
 
 RUN pip install --no-cache-dir -e /engine -e ".[dev]"
 

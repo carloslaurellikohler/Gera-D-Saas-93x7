@@ -1,4 +1,10 @@
+import { useEffect, useRef, useState } from "react";
+import { ApiError } from "../api/client";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
+import { useChatHistory } from "../hooks/useChatHistory";
+import { useSendChatMessage } from "../hooks/useSendChatMessage";
 
 const SUGGESTIONS = [
   "Sugira 3 perguntas de sondagem",
@@ -7,6 +13,35 @@ const SUGGESTIONS = [
 ];
 
 export default function AssistantPage() {
+  const history = useChatHistory();
+  const sendMessage = useSendChatMessage();
+  const [input, setInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView?.({ block: "end" });
+  }, [history.data?.messages.length]);
+
+  async function handleSend(content: string) {
+    const trimmed = content.trim();
+    if (!trimmed || sendMessage.isPending) return;
+    setError(null);
+    try {
+      await sendMessage.mutateAsync(trimmed);
+      setInput("");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setRateLimited(true);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Erro ao enviar mensagem.");
+      }
+    }
+  }
+
+  const messages = history.data?.messages ?? [];
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 280px", gap: 20, flex: 1, minHeight: 0 }}>
       <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -43,91 +78,152 @@ export default function AssistantPage() {
         </div>
 
         <div style={{ flex: 1, padding: 24, display: "flex", flexDirection: "column", gap: 18, overflow: "auto" }}>
-          <div
-            style={{
-              alignSelf: "flex-end",
-              maxWidth: "70%",
-              background: "var(--gerad-navy)",
-              color: "#fff",
-              borderRadius: "16px 16px 4px 16px",
-              padding: "12px 16px",
-              fontSize: 14,
-              lineHeight: 1.55,
-            }}
-          >
-            Por que minha Sondagem ficou baixa na última análise?
-          </div>
-          <div
-            style={{
-              alignSelf: "flex-start",
-              maxWidth: "80%",
-              background: "var(--gray-50)",
-              border: "1px solid var(--border-secondary)",
-              borderRadius: "16px 16px 16px 4px",
-              padding: "14px 18px",
-              fontSize: 14,
-              lineHeight: 1.65,
-            }}
-          >
-            O assistente ainda não está disponível nesta conta. Em breve ele vai responder com base
-            nas suas análises concluídas e na metodologia 93x7®.
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 6 }}>
-            {SUGGESTIONS.map((s) => (
-              <span
-                key={s}
-                style={{
-                  fontSize: 13,
-                  padding: "8px 14px",
-                  borderRadius: "100px",
-                  border: "1px solid var(--border-primary)",
-                }}
-              >
-                {s}
-              </span>
-            ))}
-          </div>
+          {history.isLoading && <p className="page-subtitle">Carregando...</p>}
+          {history.isError && <p className="error-text">Não foi possível carregar o histórico.</p>}
+
+          {!history.isLoading && !history.isError && messages.length === 0 && (
+            <EmptyState
+              icon="forum"
+              title="Comece uma conversa"
+              description="Pergunte sobre a metodologia 93x7® ou sobre suas análises concluídas."
+            >
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 6, justifyContent: "center" }}>
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: 13, height: "auto", padding: "8px 14px", borderRadius: "100px" }}
+                    onClick={() => handleSend(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </EmptyState>
+          )}
+
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              style={
+                message.role === "user"
+                  ? {
+                      alignSelf: "flex-end",
+                      maxWidth: "70%",
+                      background: "var(--gerad-navy)",
+                      color: "#fff",
+                      borderRadius: "16px 16px 4px 16px",
+                      padding: "12px 16px",
+                      fontSize: 14,
+                      lineHeight: 1.55,
+                      whiteSpace: "pre-wrap",
+                    }
+                  : {
+                      alignSelf: "flex-start",
+                      maxWidth: "80%",
+                      background: "var(--gray-50)",
+                      border: "1px solid var(--border-secondary)",
+                      borderRadius: "16px 16px 16px 4px",
+                      padding: "14px 18px",
+                      fontSize: 14,
+                      lineHeight: 1.65,
+                      whiteSpace: "pre-wrap",
+                    }
+              }
+            >
+              {message.content}
+            </div>
+          ))}
+
+          {sendMessage.isPending && (
+            <div
+              style={{
+                alignSelf: "flex-start",
+                maxWidth: "80%",
+                background: "var(--gray-50)",
+                border: "1px solid var(--border-secondary)",
+                borderRadius: "16px 16px 16px 4px",
+                padding: "14px 18px",
+                fontSize: 14,
+                color: "var(--content-tertiary)",
+              }}
+            >
+              Pensando...
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
 
-        <div
-          style={{
-            padding: "16px 24px",
-            borderTop: "1px solid var(--border-secondary)",
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-          }}
-        >
-          <span
+        {error && (
+          <div style={{ padding: "0 24px" }}>
+            <ErrorBanner>{error}</ErrorBanner>
+          </div>
+        )}
+
+        {rateLimited ? (
+          <div
             style={{
-              flex: 1,
-              height: 48,
-              border: "1px solid var(--border-primary)",
-              borderRadius: 14,
-              display: "flex",
-              alignItems: "center",
-              padding: "0 16px",
+              padding: "16px 24px",
+              borderTop: "1px solid var(--border-secondary)",
               fontSize: 14,
               color: "var(--content-tertiary)",
             }}
           >
-            Pergunte sobre a metodologia ou sobre suas análises
-          </span>
-          <span
+            Você atingiu o limite de perguntas de hoje. Volte amanhã.
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend(input);
+            }}
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              background: "var(--gerad-gold)",
-              color: "var(--gerad-navy)",
+              padding: "16px 24px",
+              borderTop: "1px solid var(--border-secondary)",
               display: "flex",
+              gap: 12,
               alignItems: "center",
-              justifyContent: "center",
             }}
           >
-            <Icon name="send" size={22} />
-          </span>
-        </div>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={sendMessage.isPending}
+              placeholder="Pergunte sobre a metodologia ou sobre suas análises"
+              style={{
+                flex: 1,
+                height: 48,
+                border: "1px solid var(--border-primary)",
+                borderRadius: 14,
+                padding: "0 16px",
+                fontSize: 14,
+              }}
+            />
+            <button
+              type="submit"
+              aria-label="Enviar"
+              disabled={sendMessage.isPending || !input.trim()}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 14,
+                background: "var(--gerad-gold)",
+                color: "var(--gerad-navy)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "none",
+                cursor: sendMessage.isPending || !input.trim() ? "default" : "pointer",
+                opacity: sendMessage.isPending || !input.trim() ? 0.6 : 1,
+              }}
+            >
+              <Icon name="send" size={22} />
+            </button>
+          </form>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

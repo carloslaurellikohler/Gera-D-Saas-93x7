@@ -13,13 +13,16 @@ from app.db.session import get_db
 from app.engine_integration.adapter import EngineAdapter
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.chat_message_repository import ChatMessageRepository
 from app.repositories.content_repository import ContentRepository
 from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.learning_path_enrollment_repository import LearningPathEnrollmentRepository
 from app.repositories.learning_path_repository import LearningPathRepository
+from app.repositories.methodology_chunk_repository import MethodologyChunkRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
+from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
 from app.services.content_service import ContentService
 from app.services.dashboard_service import DashboardService
@@ -69,6 +72,17 @@ def get_learning_path_service(db: Session = Depends(get_db)) -> LearningPathServ
         content_repo=ContentRepository(db),
         metrics_repo=MetricsRepository(db),
         enrollment_repo=LearningPathEnrollmentRepository(db),
+    )
+
+
+def get_assistant_service(
+    db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+) -> AssistantService:
+    return AssistantService(
+        chat_repo=ChatMessageRepository(db),
+        chunk_repo=MethodologyChunkRepository(db),
+        metrics_repo=MetricsRepository(db),
+        settings=settings,
     )
 
 
