@@ -30,6 +30,7 @@ from app.services.dashboard_service import DashboardService
 from app.services.learning_path_service import LearningPathService
 from app.services.methodology_service import MethodologyService
 from app.services.metrics_service import MetricsService
+from app.services.user_service import UserService
 from app.storage.local_storage import LocalDiskStorage
 
 
@@ -52,6 +53,10 @@ def get_auth_service(
     db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
 ) -> AuthService:
     return AuthService(repo=UserRepository(db), settings=settings)
+
+
+def get_user_service(db: Session = Depends(get_db)) -> UserService:
+    return UserService(repo=UserRepository(db))
 
 
 def get_dashboard_service(db: Session = Depends(get_db)) -> DashboardService:

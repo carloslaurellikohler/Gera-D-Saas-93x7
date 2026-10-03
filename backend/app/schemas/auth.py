@@ -1,27 +1,15 @@
-"""Schemas de request/response da autenticação. UserResponse nunca inclui password_hash."""
+"""Schemas de request/response da autenticação. UserResponse (gestão de usuários)
+mora em app.schemas.user e é reexportado aqui para não quebrar imports existentes."""
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime
+from pydantic import BaseModel
 
-from pydantic import BaseModel, ConfigDict
+from app.schemas.user import UserResponse
 
-from app.models.user import UserRole, UserStatus
+__all__ = ["LoginRequest", "UserResponse"]
 
 
 class LoginRequest(BaseModel):
     email: str
     password: str
-
-
-class UserResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    email: str
-    role: UserRole
-    status: UserStatus
-    created_at: datetime
-    last_login_at: datetime | None

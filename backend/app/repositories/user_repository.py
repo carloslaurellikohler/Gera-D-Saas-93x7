@@ -3,10 +3,10 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.user import User
+from app.models.user import User, UserRole, UserStatus
 
 
 class UserRepository:
@@ -25,6 +25,25 @@ class UserRepository:
     def get_by_email(self, email: str) -> User | None:
         stmt = select(User).where(User.email == email)
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def list(
+        self,
+        *,
+        role: UserRole | None = None,
+        status: UserStatus | None = None,
+        search: str | None = None,
+    ) -> list[User]:
+        stmt = select(User).order_by(User.name.asc())
+        if role is not None:
+            stmt = stmt.where(User.role == role)
+        if status is not None:
+            stmt = stmt.where(User.status == status)
+        if search:
+            pattern = f"%{search.lower()}%"
+            stmt = stmt.where(
+                or_(func.lower(User.name).like(pattern), func.lower(User.email).like(pattern))
+            )
+        return list(self.db.execute(stmt).scalars().all())
 
     def update(self, user_id: uuid.UUID, **fields: Any) -> User:
         user = self.get(user_id)
