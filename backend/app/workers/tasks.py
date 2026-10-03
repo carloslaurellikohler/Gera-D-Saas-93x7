@@ -25,7 +25,7 @@ def _build_analysis_service(db) -> AnalysisService:
     return AnalysisService(
         repo=AnalysisRepository(db),
         storage=LocalDiskStorage(settings.STORAGE_DIR),
-        engine=EngineAdapter(),
+        engine=EngineAdapter.from_published(db),
         settings=settings,
     )
 

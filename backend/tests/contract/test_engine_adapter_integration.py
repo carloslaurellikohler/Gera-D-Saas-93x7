@@ -11,9 +11,11 @@ padrão (excluído via -m "not slow" no pyproject.toml)."""
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 
 import pytest
+from gera_d_engine.calibration import load_calibration
 
 from app.engine_integration.adapter import EngineAdapter
 from app.engine_integration.mappers import build_input_metadata
@@ -43,7 +45,7 @@ def test_adapter_full_flow_against_real_openai(_skip_without_explicit_opt_in, tm
         encoding="utf-8",
     )
 
-    adapter = EngineAdapter()
+    adapter = EngineAdapter(calibration=load_calibration(), methodology_id=uuid.uuid4())
     analysis = Analysis(
         participant_name="João Silva",
         objective="Onboarding",

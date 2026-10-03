@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from app.core.farol import get_farol_level
 from app.models.user import User, UserRole
 from app.repositories.dashboard_repository import DashboardRepository
+from app.repositories.methodology_repository import MethodologyRepository
 from app.schemas.dashboard import (
     DashboardStatsResponse,
     FarolDistributionItem,
@@ -28,13 +29,15 @@ _TREND_EPSILON = 0.3
 
 
 class DashboardService:
-    def __init__(self, repo: DashboardRepository) -> None:
+    def __init__(self, repo: DashboardRepository, methodology_repo: MethodologyRepository) -> None:
         self.repo = repo
+        self.methodology_repo = methodology_repo
 
     def get_stats(self, *, current_user: User, period: Period = "6m") -> DashboardStatsResponse:
         since = date.today() - timedelta(days=_PERIOD_DAYS[period])
         is_admin = current_user.role == UserRole.ADMIN
         user_id = None if is_admin else current_user.id
+        label_color_map = self.methodology_repo.get_label_color_map()
 
         volume = [
             VolumeByStatus(status=status.value, count=count)
@@ -46,7 +49,7 @@ class DashboardService:
         farol_distribution = [
             FarolDistributionItem(
                 label=label or "Sem classificação",
-                level=get_farol_level(label),
+                level=get_farol_level(label, label_color_map),
                 count=count,
                 pct=_format_pct(count, total_completed),
             )
@@ -58,7 +61,7 @@ class DashboardService:
             for period_start, count, avg_score in self.repo.trend_by_week(user_id=user_id, since=since)
         ]
 
-        board = self._build_board(since) if is_admin else None
+        board = self._build_board(since, label_color_map) if is_admin else None
 
         return DashboardStatsResponse(
             period=period,
@@ -68,7 +71,7 @@ class DashboardService:
             board=board,
         )
 
-    def _build_board(self, since: date) -> list[ProfessionalBoardRow]:
+    def _build_board(self, since: date, label_color_map: dict[str, str]) -> list[ProfessionalBoardRow]:
         rows = self.repo.completed_rows_by_participant(since=since)
 
         groups: dict[str, dict] = {}
@@ -92,7 +95,7 @@ class DashboardService:
                     name=group["name"],
                     count=len(entries),
                     avg_score=_round_or_none(avg_score),
-                    level=get_farol_level(latest_label),
+                    level=get_farol_level(latest_label, label_color_map),
                     trend=_trend_from_entries(entries),
                 )
             )

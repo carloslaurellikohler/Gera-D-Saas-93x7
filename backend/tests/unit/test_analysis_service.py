@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -8,6 +9,7 @@ from gera_d_engine.schemas.transcript import Transcript, TranscriptTurn
 
 from app.core.config import Settings
 from app.models.analysis import AnalysisStatus
+from app.models.methodology import Methodology, MethodologyStatus
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.user_repository import UserRepository
@@ -25,10 +27,26 @@ def storage(tmp_path: Path) -> LocalDiskStorage:
     return LocalDiskStorage(tmp_path / "storage")
 
 
+def _seed_methodology(db_session) -> Methodology:
+    """analyses.methodology_version_id tem FK para methodologies — mesmo com um
+    engine mockado, o id gravado precisa existir de verdade na tabela."""
+    methodology = Methodology(
+        calibration_version=f"Calibração de teste {uuid.uuid4()}",
+        methodology_name="93x7®",
+        project="Projeto Teste",
+        status=MethodologyStatus.PUBLISHED,
+        content={},
+    )
+    db_session.add(methodology)
+    db_session.commit()
+    return methodology
+
+
 @pytest.fixture()
 def service(db_session, storage, settings) -> AnalysisService:
     repo = AnalysisRepository(db_session)
     engine = MagicMock()
+    engine.methodology_id = _seed_methodology(db_session).id
     return AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
 
 
@@ -242,6 +260,7 @@ def test_run_pipeline_does_not_depend_on_settings_defaults(
     )
     repo = AnalysisRepository(db_session)
     engine = MagicMock()
+    engine.methodology_id = _seed_methodology(db_session).id
     service = AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
 
     analysis = _create_uploaded_analysis(service, storage, current_user)

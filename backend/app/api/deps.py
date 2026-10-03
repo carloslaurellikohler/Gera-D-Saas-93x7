@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.security import ACCESS_TOKEN_COOKIE, decode_access_token
 from app.db.session import get_db
-from app.engine_integration.adapter import EngineAdapter
+from app.engine_integration.adapter import EngineAdapter, NoPublishedMethodologyError
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.chat_message_repository import ChatMessageRepository
@@ -19,6 +19,7 @@ from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.learning_path_enrollment_repository import LearningPathEnrollmentRepository
 from app.repositories.learning_path_repository import LearningPathRepository
 from app.repositories.methodology_chunk_repository import MethodologyChunkRepository
+from app.repositories.methodology_repository import MethodologyRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
 from app.services.analysis_service import AnalysisService
@@ -27,6 +28,7 @@ from app.services.auth_service import AuthService
 from app.services.content_service import ContentService
 from app.services.dashboard_service import DashboardService
 from app.services.learning_path_service import LearningPathService
+from app.services.methodology_service import MethodologyService
 from app.services.metrics_service import MetricsService
 from app.storage.local_storage import LocalDiskStorage
 
@@ -34,10 +36,14 @@ from app.storage.local_storage import LocalDiskStorage
 def get_analysis_service(
     db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
 ) -> AnalysisService:
+    try:
+        engine = EngineAdapter.from_published(db)
+    except NoPublishedMethodologyError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return AnalysisService(
         repo=AnalysisRepository(db),
         storage=LocalDiskStorage(settings.STORAGE_DIR),
-        engine=EngineAdapter(),
+        engine=engine,
         settings=settings,
     )
 
@@ -49,7 +55,11 @@ def get_auth_service(
 
 
 def get_dashboard_service(db: Session = Depends(get_db)) -> DashboardService:
-    return DashboardService(repo=DashboardRepository(db))
+    return DashboardService(repo=DashboardRepository(db), methodology_repo=MethodologyRepository(db))
+
+
+def get_methodology_service(db: Session = Depends(get_db)) -> MethodologyService:
+    return MethodologyService(repo=MethodologyRepository(db))
 
 
 def get_metrics_service(db: Session = Depends(get_db)) -> MetricsService:

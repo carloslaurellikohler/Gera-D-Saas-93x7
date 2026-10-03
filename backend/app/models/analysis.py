@@ -66,6 +66,14 @@ class Analysis(Base):
     pb_id: Mapped[str | None] = mapped_column(String(64))
     interaction_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
 
+    # Versão de metodologia usada para gerar o resultado (Fase 7) — RESTRICT: nunca
+    # apagar uma versão referenciada por uma análise existente. Nullable: análises
+    # pré-Fase-7 ficam órfãs aqui (a única pista histórica delas é a string
+    # calibration_version dentro de analysis_result), sem backfill artificial.
+    methodology_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("methodologies.id", ondelete="RESTRICT"), index=True
+    )
+
     # Resultados produzidos pela engine
     transcription: Mapped[dict | None] = mapped_column(JSONB)
     analysis_result: Mapped[dict | None] = mapped_column(JSONB)

@@ -105,20 +105,43 @@ não são aceitos — limitação da engine, comunicada como erro 4xx claro, nun
   aba "Em andamento" (progresso do usuário) fica fora desta rodada — exigiria tabela e
   endpoints próprios, fora do escopo combinado para a Fase 5.
 
+- **Fase 6 — Assistente de IA (chatbot RAG leve)** — tabelas `MethodologyChunk` (chunks de
+  `docs/metodologia_93x7.pdf`, com embedding `ARRAY(Float)`, sem pgvector — corpus pequeno e
+  estático, busca por cosseno em memória) e `ChatMessage` (histórico por usuário, com rate
+  limit diário). Ingestão via `backend/scripts/ingest_methodology.py`, rodada manualmente
+  sempre que o PDF mudar (sem endpoint HTTP, sem trigger automático). Contexto pessoal
+  (`AssistantService`) reaproveita `scores_by_criterion`/`overall_score` via
+  `MetricsRepository` — nunca a transcrição bruta nem campos de texto livre da engine. Rotas
+  `GET`/`POST /assistant/messages`. Tela `AssistantPage` (`/assistente`).
+- **Fase 7 — Migração da calibração para Postgres** — tabelas `Methodology` (identidade +
+  ciclo de vida DRAFT/PUBLISHED/ARCHIVED + prosa global do YAML num JSONB `content`),
+  `MethodologyCategory` (6 por versão, os critérios comportamentais) e `Calibrator` (4 por
+  versão, as faixas de farol), substituindo `calibration/v1.yaml` como fonte da engine. A
+  engine (`engine/`) continua intocada: `backend/app/engine_integration/
+  calibration_builder.py` é a única ponte que monta o objeto `Calibration` a partir do
+  Postgres, preservando o shape e o contrato (`backend/tests/contract/
+  test_engine_contract.py` não mudou). `EngineAdapter.from_published(db)` resolve a versão
+  `PUBLISHED` vigente a cada análise (não mais um singleton fixo no boot); publicar uma
+  versão arquiva automaticamente a anterior, com índice parcial único garantindo no máximo
+  1 `PUBLISHED` por vez no banco. `analyses.methodology_version_id` (FK, `ondelete=
+  RESTRICT`, nullable — análises pré-Fase-7 ficam órfãs aqui) registra de forma relacional
+  qual versão gerou cada resultado. `MethodologyService.publish()` valida que as categorias
+  do rascunho casam exatamente com `CriterionKey` e que há 4 calibradores cobrindo as 4
+  cores do farol antes de publicar — sem isso, 409. Sem campo de peso numérico por
+  critério: a nota geral continua vindo de julgamento holístico (ver nota de decisão
+  abaixo), nunca de fórmula. `backend/app/core/farol.py` e o quadro individual do Dashboard
+  passaram a ler o mapa label→cor do Postgres (`MethodologyRepository.
+  get_label_color_map()`, cobrindo também versões arquivadas) em vez de um dicionário
+  hardcoded. Tela `/calibracao` (`CalibrationPage.tsx`, já existia como mock) conectada aos
+  endpoints reais de `/methodology`, com fluxo de criar rascunho (a partir de uma versão
+  existente), editar e publicar.
+
 ## Roadmap das fases seguintes
 
 Cada fase deve começar com uma nova rodada de exploração + planejamento antes de ser
 implementada — os itens abaixo são a visão de alto nível, não um plano de implementação
 pronto.
 
-- **Fase 6 — Assistente de IA (chatbot RAG)**: reaproveita o padrão `ChatOpenAI` do engine,
-  mas como módulo novo e paralelo — hoje não existe infraestrutura de RAG/vector store no
-  projeto, será construída do zero.
-- **Fase 7 — Migração da calibração para Postgres**: tabelas versionadas (`Methodology`,
-  `MethodologyCategory`, `Calibrator`) substituindo `calibration/v1.yaml`, com estados
-  DRAFT/PUBLISHED/ARCHIVED e versionamento por análise (nunca recalcular resultados antigos
-  silenciosamente). Mudança sensível — exige plano próprio dado o vínculo com os testes de
-  contrato da engine.
 - **Fase 8 — Hardening**: segurança, testes, performance, auditoria administrativa.
 
 ## Identidade visual e mockups
@@ -144,4 +167,11 @@ Foi produzido um prompt detalhado para o Claude Design cobrindo:
   isso sem sinalizar antes ao usuário.
 - Testes de repositório usam Postgres descartável, nunca SQLite.
 - Nota geral de uma análise vem do julgamento holístico das etapas de IA, nunca de uma
-  fórmula aritmética simples sobre os pilares.
+  fórmula aritmética simples sobre os pilares — por isso as tabelas de metodologia (Fase 7)
+  não têm campo de peso numérico por critério.
+- Publicar uma nova versão de metodologia em `/calibracao` (Postgres, Fase 7) **não**
+  atualiza o corpus do Assistente de IA (Fase 6). O RAG indexa só
+  `docs/metodologia_93x7.pdf` via `backend/scripts/ingest_methodology.py`, rodado
+  manualmente. Se o racional da metodologia mudar de fato (não só a calibração técnica),
+  alguém precisa atualizar o PDF e rodar o script de novo — os dois podem ficar
+  dessincronizados silenciosamente, por design, nesta fase.

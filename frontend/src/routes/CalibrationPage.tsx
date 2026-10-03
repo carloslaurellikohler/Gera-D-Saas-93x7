@@ -1,21 +1,132 @@
+import { useEffect, useState } from "react";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
+import { useCreateMethodologyDraft } from "../hooks/useCreateMethodologyDraft";
+import { useDeleteMethodologyDraft } from "../hooks/useDeleteMethodologyDraft";
+import { useMethodologies } from "../hooks/useMethodologies";
+import { useMethodology } from "../hooks/useMethodology";
+import { usePublishMethodology } from "../hooks/usePublishMethodology";
+import { useUpdateMethodologyDraft } from "../hooks/useUpdateMethodologyDraft";
+import { formatDate } from "../lib/format";
+import { ApiError } from "../api/client";
+import type { Calibrator, FarolColor, MethodologyCategory, MethodologyStatus } from "../types/methodology";
 
-const VERSIONS = [
-  { v: "v2.3", state: "Ativa", date: "12/07/2026", n: 342 },
-  { v: "v2.2", state: "Encerrada", date: "03/03/2026", n: 210 },
-  { v: "v2.1", state: "Encerrada", date: "18/11/2025", n: 178 },
-];
+const STATUS_LABEL: Record<MethodologyStatus, string> = {
+  DRAFT: "Rascunho",
+  PUBLISHED: "Ativa",
+  ARCHIVED: "Encerrada",
+};
 
-const WEIGHTS = [
-  { name: "Abertura e rapport", w: 15 },
-  { name: "Sondagem", w: 20 },
-  { name: "Argumentação", w: 20 },
-  { name: "Tratamento de objeções", w: 15 },
-  { name: "Encaminhamento", w: 15 },
-  { name: "Eficiência da condução", w: 15 },
-];
+const COLOR_HEX: Record<FarolColor, string> = {
+  vermelho: "#B00020",
+  laranja: "#C95800",
+  amarelo: "#A87800",
+  verde: "#0F7A45",
+};
+
+const COLOR_OPTIONS: FarolColor[] = ["verde", "amarelo", "laranja", "vermelho"];
+
+// -999 é o sentinela da engine (v1.yaml) para "sem piso real" na faixa mais baixa
+// (band.min <= score <= band.max) — aqui é só exibição, o valor salvo não muda.
+const OPEN_FLOOR_SENTINEL = -999;
+
+function formatBandRange(min: number, max: number): string {
+  return min <= OPEN_FLOOR_SENTINEL ? `≤ ${max}` : `${min}–${max}`;
+}
 
 export default function CalibrationPage() {
+  const { data: versions, isLoading, isError } = useMethodologies();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedId === null && versions && versions.length > 0) {
+      setSelectedId(versions[0].id);
+    }
+  }, [versions, selectedId]);
+
+  const { data: selected } = useMethodology(selectedId);
+  const [calibrationVersion, setCalibrationVersion] = useState("");
+  const [categories, setCategories] = useState<MethodologyCategory[]>([]);
+  const [calibrators, setCalibrators] = useState<Calibrator[]>([]);
+
+  useEffect(() => {
+    if (selected) {
+      setCalibrationVersion(selected.calibration_version);
+      setCategories(selected.categories);
+      setCalibrators(selected.calibrators);
+    }
+  }, [selected]);
+
+  const createDraft = useCreateMethodologyDraft();
+  const updateDraft = useUpdateMethodologyDraft();
+  const publish = usePublishMethodology();
+  const deleteDraft = useDeleteMethodologyDraft();
+
+  const isDraft = selected?.status === "DRAFT";
+
+  function handleCreateDraft() {
+    setFormError(null);
+    createDraft.mutate(selected?.id, {
+      onSuccess: (created) => setSelectedId(created.id),
+      onError: () => setFormError("Não foi possível criar a nova versão."),
+    });
+  }
+
+  function handleSave() {
+    if (!selected) return;
+    setFormError(null);
+    updateDraft.mutate(
+      {
+        id: selected.id,
+        payload: {
+          calibration_version: calibrationVersion,
+          methodology_name: selected.methodology_name,
+          project: selected.project,
+          content: selected.content,
+          categories,
+          calibrators,
+        },
+      },
+      { onError: (err) => setFormError(err instanceof ApiError ? err.message : "Não foi possível salvar o rascunho.") },
+    );
+  }
+
+  function handlePublish() {
+    if (!selected) return;
+    const activeVersion = versions?.find((v) => v.status === "PUBLISHED");
+    const confirmed = window.confirm(
+      activeVersion
+        ? `Publicar "${calibrationVersion}"? A versão ativa atual ("${activeVersion.calibration_version}") será encerrada e passará a valer só para o histórico.`
+        : `Publicar "${calibrationVersion}"?`,
+    );
+    if (!confirmed) return;
+    setFormError(null);
+    publish.mutate(selected.id, {
+      onError: (err) =>
+        setFormError(err instanceof ApiError ? err.message : "Não foi possível publicar esta versão."),
+    });
+  }
+
+  function handleDelete() {
+    if (!selected) return;
+    if (!window.confirm(`Excluir o rascunho "${calibrationVersion}"? Esta ação não pode ser desfeita.`)) return;
+    setFormError(null);
+    deleteDraft.mutate(selected.id, {
+      onSuccess: () => setSelectedId(null),
+      onError: (err) => setFormError(err instanceof ApiError ? err.message : "Não foi possível excluir o rascunho."),
+    });
+  }
+
+  function updateCategory(index: number, patch: Partial<MethodologyCategory>) {
+    setCategories((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
+
+  function updateCalibrator(index: number, patch: Partial<Calibrator>) {
+    setCalibrators((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -23,9 +134,9 @@ export default function CalibrationPage() {
           <h1>Metodologia e calibração</h1>
           <span className="page-subtitle">Versões dos critérios e da régua de faixas.</span>
         </div>
-        <button className="btn btn-secondary">
+        <button className="btn btn-secondary" onClick={handleCreateDraft} disabled={createDraft.isPending}>
           <Icon name="content_copy" size={20} />
-          Nova versão a partir da v2.3
+          {selected ? `Nova versão a partir de "${selected.calibration_version}"` : "Nova versão"}
         </button>
       </div>
 
@@ -35,107 +146,194 @@ export default function CalibrationPage() {
         vale para análises futuras.
       </div>
 
-      <div className="two-col-grid">
-        <div className="data-table">
-          <div
-            className="data-table-row data-table-head"
-            style={{ gridTemplateColumns: "70px 130px 1fr 90px" }}
-          >
-            <span>Versão</span>
-            <span>Estado</span>
-            <span>Publicada em</span>
-            <span>Análises</span>
-          </div>
-          {VERSIONS.map((v) => (
+      {isLoading && <p className="page-subtitle">Carregando...</p>}
+      {isError && <ErrorBanner>Não foi possível carregar as versões de metodologia.</ErrorBanner>}
+
+      {versions && versions.length === 0 && (
+        <EmptyState
+          icon="tune"
+          title="Nenhuma versão cadastrada"
+          description="Crie a primeira versão para começar a calibrar a metodologia."
+        />
+      )}
+
+      {versions && versions.length > 0 && (
+        <div className="two-col-grid">
+          <div className="data-table">
             <div
-              key={v.v}
-              className="data-table-row"
-              style={{ gridTemplateColumns: "70px 130px 1fr 90px" }}
+              className="data-table-row data-table-head"
+              style={{ gridTemplateColumns: "1fr 110px 130px" }}
             >
-              <b>{v.v}</b>
-              <span
-                className="pill"
-                style={{ height: "auto", padding: "3px 10px", justifySelf: "start" }}
-              >
-                {v.state}
-              </span>
-              <span className="page-subtitle">{v.date}</span>
-              <b>{v.n}</b>
+              <span>Versão</span>
+              <span>Estado</span>
+              <span>Publicada em</span>
             </div>
-          ))}
-        </div>
-
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3>Versão 2.4 · rascunho</h3>
-            <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 6, border: "1px dashed var(--gray-900)" }}>
-              Rascunho
-            </span>
-          </div>
-
-          <span className="kpi-label">Régua de faixas (0–100)</span>
-          <div style={{ display: "flex", height: 34, borderRadius: 8, overflow: "hidden", fontSize: 11, fontWeight: 700, color: "#fff" }}>
-            <span style={{ width: "50%", background: "#B00020", display: "flex", alignItems: "center", paddingLeft: 10 }}>
-              Crítico 0–49
-            </span>
-            <span style={{ width: "20%", background: "#C95800", display: "flex", alignItems: "center", paddingLeft: 10 }}>
-              Prior. 50–69
-            </span>
-            <span style={{ width: "15%", background: "#A87800", display: "flex", alignItems: "center", paddingLeft: 8 }}>
-              70–84
-            </span>
-            <span style={{ width: "15%", background: "#0F7A45", display: "flex", alignItems: "center", paddingLeft: 8 }}>
-              85+
-            </span>
-          </div>
-
-          <span className="kpi-label">Pesos dos critérios</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {WEIGHTS.map((w) => (
-              <div key={w.name} style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13 }}>
-                <span style={{ flex: 1 }}>{w.name}</span>
+            {versions.map((v) => (
+              <div
+                key={v.id}
+                className="data-table-row"
+                style={{ gridTemplateColumns: "1fr 110px 130px", cursor: "pointer" }}
+                onClick={() => setSelectedId(v.id)}
+              >
+                <b style={{ fontWeight: v.id === selectedId ? 700 : 400 }}>{v.calibration_version}</b>
                 <span
-                  style={{
-                    width: 64,
-                    height: 36,
-                    border: "1px solid var(--border-primary)",
-                    borderRadius: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 600,
-                  }}
+                  className="pill"
+                  style={{ height: "auto", padding: "3px 10px", justifySelf: "start" }}
                 >
-                  {w.w}%
+                  {STATUS_LABEL[v.status]}
                 </span>
+                <span className="page-subtitle">{v.published_at ? formatDate(v.published_at) : "—"}</span>
               </div>
             ))}
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingTop: 8,
-              borderTop: "1px solid var(--border-secondary)",
-            }}
-          >
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#0B6B3A", display: "flex", gap: 6, alignItems: "center" }}>
-              <Icon name="check_circle" size={18} filled />
-              Soma = 100%
-            </span>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-secondary" style={{ height: 40 }}>
-                Salvar rascunho
-              </button>
-              <button className="btn btn-primary" style={{ height: 40 }}>
-                Publicar v2.4
-              </button>
+          {selected && (
+            <div className="card" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                {isDraft ? (
+                  <input
+                    value={calibrationVersion}
+                    onChange={(e) => setCalibrationVersion(e.target.value)}
+                    style={{ font: "inherit", fontWeight: 600, flex: 1, border: "1px solid var(--border-primary)", borderRadius: 8, padding: "6px 10px" }}
+                  />
+                ) : (
+                  <h3>{calibrationVersion}</h3>
+                )}
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "3px 10px",
+                    borderRadius: 6,
+                    border: isDraft ? "1px dashed var(--gray-900)" : "1px solid var(--border-primary)",
+                  }}
+                >
+                  {STATUS_LABEL[selected.status]}
+                </span>
+              </div>
+
+              {formError && <ErrorBanner>{formError}</ErrorBanner>}
+
+              <span className="kpi-label">Régua de faixas</span>
+              <div style={{ display: "flex", height: 34, borderRadius: 8, overflow: "hidden", fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                {calibrators.map((c) => (
+                  <span
+                    key={c.key}
+                    style={{ flex: 1, background: COLOR_HEX[c.color], display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    {formatBandRange(c.min, c.max)}
+                  </span>
+                ))}
+              </div>
+              {isDraft && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {calibrators.map((c, i) => (
+                    <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                      <select
+                        value={c.color}
+                        onChange={(e) => updateCalibrator(i, { color: e.target.value as FarolColor })}
+                      >
+                        {COLOR_OPTIONS.map((color) => (
+                          <option key={color} value={color}>
+                            {color}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={c.label}
+                        onChange={(e) => updateCalibrator(i, { label: e.target.value })}
+                        style={{ flex: 1 }}
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={c.min}
+                        onChange={(e) => updateCalibrator(i, { min: Number(e.target.value) })}
+                        style={{ width: 64 }}
+                      />
+                      <span>–</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={c.max}
+                        onChange={(e) => updateCalibrator(i, { max: Number(e.target.value) })}
+                        style={{ width: 64 }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <span className="kpi-label">Critérios comportamentais</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {categories.map((category, i) => (
+                  <div key={category.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {isDraft ? (
+                      <>
+                        <input
+                          value={category.label}
+                          onChange={(e) => updateCategory(i, { label: e.target.value })}
+                          style={{ fontWeight: 600 }}
+                        />
+                        <textarea
+                          value={category.description}
+                          onChange={(e) => updateCategory(i, { description: e.target.value })}
+                          rows={2}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <b>{category.label}</b>
+                        <span className="page-subtitle">{category.description}</span>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {categories.length === 0 && (
+                  <span className="page-subtitle">
+                    Nenhum critério cadastrado ainda — use "Nova versão a partir de" uma versão existente
+                    para começar com os 6 critérios já preenchidos.
+                  </span>
+                )}
+              </div>
+
+              {isDraft && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    paddingTop: 8,
+                    borderTop: "1px solid var(--border-secondary)",
+                  }}
+                >
+                  <button className="btn btn-secondary" style={{ height: 40 }} onClick={handleDelete}>
+                    Excluir rascunho
+                  </button>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ height: 40 }}
+                      onClick={handleSave}
+                      disabled={updateDraft.isPending}
+                    >
+                      Salvar rascunho
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      style={{ height: 40 }}
+                      onClick={handlePublish}
+                      disabled={publish.isPending}
+                    >
+                      Publicar "{calibrationVersion}"
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ from app.models import learning_path as _learning_path_models  # noqa: F401 — 
 from app.models import (  # noqa: F401 — registra o modelo em Base.metadata
     learning_path_enrollment as _learning_path_enrollment_models,
 )
+from app.models import methodology as _methodology_models  # noqa: F401 — registra o modelo em Base.metadata
 from app.models import (  # noqa: F401 — registra o modelo em Base.metadata
     methodology_chunk as _methodology_chunk_models,
 )

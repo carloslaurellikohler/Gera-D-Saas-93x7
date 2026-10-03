@@ -128,7 +128,11 @@ class AnalysisService:
         # settings, para refletir o usuário que de fato criou a análise.
         metadata = build_input_metadata(analysis, cs_id=analysis.cs_id, cs_name=analysis.cs_name)
         result = self.engine.run_pipeline(transcript, metadata)
-        self.repo.update(analysis.id, analysis_result=result.model_dump(mode="json"))
+        self.repo.update(
+            analysis.id,
+            analysis_result=result.model_dump(mode="json"),
+            methodology_version_id=self.engine.methodology_id,
+        )
         return result
 
     def _run_reports(self, analysis: Analysis, result: AnalysisResult) -> None:

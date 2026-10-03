@@ -36,9 +36,14 @@ ALLOWED_MIME_TYPES: set[str] = {
 
 
 class CriterionKey(str, enum.Enum):
-    """Espelha CriterionScore.key da engine (scores_by_criterion), por duplicação
-    intencional — a engine nunca é importada fora de engine_integration/. Usado para
-    casar materiais/trilhas (Fase 5) com os critérios de pior desempenho do usuário."""
+    """Espelha as chaves de critério da metodologia (Fase 7: MethodologyCategory.key no
+    Postgres; antes, criteria em calibration/v1.yaml), por duplicação intencional —
+    continua um enum Python fixo porque também é usado como tipo de coluna em
+    Content/LearningPath (Fase 5), fora do escopo de tornar dinâmico. A duplicação é
+    validada em MethodologyService.publish(): publicar uma versão cujas categorias não
+    casem exatamente com este enum falha com 409 em vez de dessincronizar
+    silenciosamente. Usado também para casar materiais/trilhas com os critérios de
+    pior desempenho do usuário."""
 
     POSICIONAMENTO = "posicionamento"
     CONEXAO = "conexao"

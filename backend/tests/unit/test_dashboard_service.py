@@ -5,16 +5,42 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.models.analysis import Analysis, AnalysisStatus
+from app.models.methodology import Calibrator, FarolColor, Methodology, MethodologyStatus
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.dashboard_repository import DashboardRepository
+from app.repositories.methodology_repository import MethodologyRepository
 from app.repositories.user_repository import UserRepository
 from app.services.dashboard_service import DashboardService
 
 
+def _seed_calibrators(db_session) -> None:
+    """Farol da metodologia seedada, usada por get_farol_level via
+    MethodologyRepository.get_label_color_map() — espelha os labels/cores reais de
+    calibration/v1.yaml para que os testes de normalização de farol continuem válidos."""
+    methodology = Methodology(
+        calibration_version="Calibração de teste v1",
+        methodology_name="93x7®",
+        project="Projeto Teste",
+        status=MethodologyStatus.PUBLISHED,
+        content={},
+        calibrators=[
+            Calibrator(key="excelente", label="Excelente desempenho", color=FarolColor.VERDE, min=8.0, max=10.0, order_index=0),
+            Calibrator(key="atencao", label="Atenção", color=FarolColor.AMARELO, min=7.0, max=7.9, order_index=1),
+            Calibrator(key="desenvolvimento_prioritario", label="Desenvolvimento prioritário", color=FarolColor.LARANJA, min=6.0, max=6.9, order_index=2),
+            Calibrator(key="desenvolvimento_critico", label="Desenvolvimento crítico", color=FarolColor.VERMELHO, min=-999, max=5.9, order_index=3),
+        ],
+    )
+    db_session.add(methodology)
+    db_session.commit()
+
+
 @pytest.fixture()
 def service(db_session) -> DashboardService:
-    return DashboardService(repo=DashboardRepository(db_session))
+    _seed_calibrators(db_session)
+    return DashboardService(
+        repo=DashboardRepository(db_session), methodology_repo=MethodologyRepository(db_session)
+    )
 
 
 @pytest.fixture()
