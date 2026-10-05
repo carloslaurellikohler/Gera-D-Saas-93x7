@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CalibrationPage from "./CalibrationPage";
+import { ConfirmProvider } from "../context/ConfirmContext";
 import * as methodologyApi from "../api/methodology";
 import type { MethodologyDetail, MethodologySummary } from "../types/methodology";
 
@@ -11,7 +12,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <CalibrationPage />
+        <ConfirmProvider>
+          <CalibrationPage />
+        </ConfirmProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -93,13 +96,15 @@ describe("CalibrationPage", () => {
     const publishSpy = vi
       .spyOn(methodologyApi, "publishMethodology")
       .mockResolvedValue({ ...detailFor(DRAFT_SUMMARY), status: "PUBLISHED" });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
 
     await screen.findByDisplayValue("Posicionamento");
     const publishButton = screen.getByText(/^Publicar/);
     fireEvent.click(publishButton);
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publicar" }));
 
     await waitFor(() => expect(publishSpy).toHaveBeenCalledWith("v2"));
   });

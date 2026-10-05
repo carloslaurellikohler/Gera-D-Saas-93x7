@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useConfirm } from "../context/ConfirmContext";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
@@ -72,12 +73,19 @@ type TrailFormMode = { mode: "create" } | { mode: "edit"; path: LearningPathSumm
 function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
   const [formMode, setFormMode] = useState<TrailFormMode | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const confirm = useConfirm();
   const recommended = useRecommendedPaths();
   const paths = useLearningPaths();
   const deleteTrail = useDeleteLearningPath();
 
   const handleDelete = async (path: LearningPathSummary) => {
-    if (!window.confirm(`Excluir a trilha "${path.title}"? Esta ação não pode ser desfeita.`)) {
+    const confirmed = await confirm({
+      title: `Excluir a trilha "${path.title}"?`,
+      description: "Esta ação não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!confirmed) {
       return;
     }
     setActionError(null);
@@ -333,11 +341,18 @@ type MaterialFormMode = { mode: "create" } | { mode: "edit"; item: ContentRespon
 function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
   const [formMode, setFormMode] = useState<MaterialFormMode | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const confirm = useConfirm();
   const content = useContentLibrary();
   const deleteMaterial = useDeleteContent();
 
   const handleDelete = async (item: ContentResponse) => {
-    if (!window.confirm(`Excluir o material "${item.title}"? Esta ação não pode ser desfeita.`)) {
+    const confirmed = await confirm({
+      title: `Excluir o material "${item.title}"?`,
+      description: "Esta ação não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!confirmed) {
       return;
     }
     setActionError(null);

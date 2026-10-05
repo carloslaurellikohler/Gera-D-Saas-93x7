@@ -4,6 +4,7 @@ import EmptyState from "../components/ui/EmptyState";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
 import { useAuth } from "../context/AuthContext";
+import { useConfirm } from "../context/ConfirmContext";
 import { useActivateUser } from "../hooks/useActivateUser";
 import { useCreateUser } from "../hooks/useCreateUser";
 import { useDeactivateUser } from "../hooks/useDeactivateUser";
@@ -39,6 +40,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 export default function UserAdminPage() {
   const { user: currentUser } = useAuth();
+  const confirm = useConfirm();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
   const [formMode, setFormMode] = useState<UserFormMode | null>(null);
@@ -55,7 +57,12 @@ export default function UserAdminPage() {
   const handleToggleStatus = async (target: User) => {
     const activating = target.status === "INACTIVE";
     const verb = activating ? "Reativar" : "Inativar";
-    if (!window.confirm(`${verb} o usuário "${target.name}"?`)) {
+    const confirmed = await confirm({
+      title: `${verb} o usuário "${target.name}"?`,
+      confirmLabel: verb,
+      tone: activating ? "default" : "danger",
+    });
+    if (!confirmed) {
       return;
     }
     setActionError(null);

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LibraryPage from "./LibraryPage";
 import { AuthProvider } from "../context/AuthContext";
+import { ConfirmProvider } from "../context/ConfirmContext";
 import * as authApi from "../api/auth";
 import * as learningPathsApi from "../api/learningPaths";
 import * as contentApi from "../api/content";
@@ -19,7 +20,9 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <AuthProvider>
-          <LibraryPage />
+          <ConfirmProvider>
+            <LibraryPage />
+          </ConfirmProvider>
         </AuthProvider>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -112,11 +115,12 @@ describe("LibraryPage", () => {
     vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(ADMIN);
     vi.spyOn(learningPathsApi, "listLearningPaths").mockResolvedValue([PATH]);
     const deleteSpy = vi.spyOn(learningPathsApi, "deleteLearningPath").mockResolvedValue(undefined);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
 
     await user.click(await screen.findByRole("button", { name: "Excluir trilha" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
 
     expect(deleteSpy.mock.calls[0]?.[0]).toBe("path-1");
   });
@@ -126,11 +130,12 @@ describe("LibraryPage", () => {
     vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(ADMIN);
     vi.spyOn(learningPathsApi, "listLearningPaths").mockResolvedValue([PATH]);
     const deleteSpy = vi.spyOn(learningPathsApi, "deleteLearningPath").mockResolvedValue(undefined);
-    vi.spyOn(window, "confirm").mockReturnValue(false);
 
     renderPage();
 
     await user.click(await screen.findByRole("button", { name: "Excluir trilha" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancelar" }));
 
     expect(deleteSpy).not.toHaveBeenCalled();
   });
@@ -190,11 +195,12 @@ describe("LibraryPage", () => {
     vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(ADMIN);
     vi.spyOn(contentApi, "listContent").mockResolvedValue([MATERIAL]);
     const deleteSpy = vi.spyOn(contentApi, "deleteContent").mockResolvedValue(undefined);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
     await user.click(screen.getByRole("button", { name: "Materiais de apoio" }));
     await user.click(await screen.findByRole("button", { name: "Excluir material" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
 
     expect(deleteSpy.mock.calls[0]?.[0]).toBe("content-1");
   });
@@ -206,11 +212,12 @@ describe("LibraryPage", () => {
     vi
       .spyOn(contentApi, "deleteContent")
       .mockRejectedValue(new ApiError(409, "Este material ainda está vinculado a uma ou mais trilhas."));
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
     await user.click(screen.getByRole("button", { name: "Materiais de apoio" }));
     await user.click(await screen.findByRole("button", { name: "Excluir material" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
 
     expect(
       await screen.findByText("Este material ainda está vinculado a uma ou mais trilhas."),

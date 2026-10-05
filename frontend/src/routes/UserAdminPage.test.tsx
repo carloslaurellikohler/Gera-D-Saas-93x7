@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import UserAdminPage from "./UserAdminPage";
 import { AuthProvider } from "../context/AuthContext";
+import { ConfirmProvider } from "../context/ConfirmContext";
 import * as authApi from "../api/auth";
 import * as usersApi from "../api/users";
 import { ApiError } from "../api/client";
@@ -16,7 +17,9 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <AuthProvider>
-          <UserAdminPage />
+          <ConfirmProvider>
+            <UserAdminPage />
+          </ConfirmProvider>
         </AuthProvider>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -155,12 +158,13 @@ describe("UserAdminPage", () => {
       ...OTHER_USER,
       status: "INACTIVE",
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
     await screen.findByText("Ana Souza");
 
     await user.click(screen.getAllByRole("button", { name: "Inativar usuário" })[1]);
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Inativar" }));
 
     expect(deactivateSpy.mock.calls[0]?.[0]).toBe("user-1");
   });
@@ -172,12 +176,13 @@ describe("UserAdminPage", () => {
       ...OTHER_USER,
       status: "INACTIVE",
     });
-    vi.spyOn(window, "confirm").mockReturnValue(false);
 
     renderPage();
     await screen.findByText("Ana Souza");
 
     await user.click(screen.getAllByRole("button", { name: "Inativar usuário" })[1]);
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancelar" }));
 
     expect(deactivateSpy).not.toHaveBeenCalled();
   });

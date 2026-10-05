@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
+import { useConfirm } from "../context/ConfirmContext";
 import { useCreateMethodologyDraft } from "../hooks/useCreateMethodologyDraft";
 import { useDeleteMethodologyDraft } from "../hooks/useDeleteMethodologyDraft";
 import { useMethodologies } from "../hooks/useMethodologies";
@@ -36,6 +37,7 @@ function formatBandRange(min: number, max: number): string {
 }
 
 export default function CalibrationPage() {
+  const confirm = useConfirm();
   const { data: versions, isLoading, isError } = useMethodologies();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -93,14 +95,16 @@ export default function CalibrationPage() {
     );
   }
 
-  function handlePublish() {
+  async function handlePublish() {
     if (!selected) return;
     const activeVersion = versions?.find((v) => v.status === "PUBLISHED");
-    const confirmed = window.confirm(
-      activeVersion
-        ? `Publicar "${calibrationVersion}"? A versão ativa atual ("${activeVersion.calibration_version}") será encerrada e passará a valer só para o histórico.`
-        : `Publicar "${calibrationVersion}"?`,
-    );
+    const confirmed = await confirm({
+      title: `Publicar "${calibrationVersion}"?`,
+      description: activeVersion
+        ? `A versão ativa atual ("${activeVersion.calibration_version}") será encerrada e passará a valer só para o histórico.`
+        : undefined,
+      confirmLabel: "Publicar",
+    });
     if (!confirmed) return;
     setFormError(null);
     publish.mutate(selected.id, {
@@ -109,9 +113,15 @@ export default function CalibrationPage() {
     });
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!selected) return;
-    if (!window.confirm(`Excluir o rascunho "${calibrationVersion}"? Esta ação não pode ser desfeita.`)) return;
+    const confirmed = await confirm({
+      title: `Excluir o rascunho "${calibrationVersion}"?`,
+      description: "Esta ação não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setFormError(null);
     deleteDraft.mutate(selected.id, {
       onSuccess: () => setSelectedId(null),
