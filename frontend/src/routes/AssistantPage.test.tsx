@@ -83,6 +83,33 @@ describe("AssistantPage", () => {
     expect(await screen.findByText("Erro interno.")).toBeInTheDocument();
   });
 
+  it("starts a new conversation and shows the empty state again", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(assistantApi, "getChatHistory")
+      .mockResolvedValueOnce({ messages: [USER_MESSAGE, ASSISTANT_MESSAGE] })
+      .mockResolvedValueOnce({ messages: [] });
+    const startSpy = vi.spyOn(assistantApi, "startNewConversation").mockResolvedValue(undefined);
+
+    renderPage();
+
+    await screen.findByText("O que é o Pilar 7?");
+    await user.click(screen.getByRole("button", { name: "Nova Conversa" }));
+
+    expect(startSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Comece uma conversa")).toBeInTheDocument();
+    expect(
+      screen.queryByText("O Pilar 7 representa o conteúdo/resultado da conversa."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables the new conversation button when there is no history yet", async () => {
+    vi.spyOn(assistantApi, "getChatHistory").mockResolvedValue({ messages: [] });
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "Nova Conversa" })).toBeDisabled();
+  });
+
   it("shows the daily limit message instead of the input on a 429", async () => {
     const user = userEvent.setup();
     vi.spyOn(assistantApi, "getChatHistory").mockResolvedValue({ messages: [] });

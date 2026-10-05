@@ -75,3 +75,21 @@ def test_send_message_returns_429_when_daily_limit_reached(client, db_session):
     response = client.post("/api/v1/assistant/messages", json={"content": "estourei o limite"})
 
     assert response.status_code == 429
+
+
+def test_start_new_conversation_requires_authentication(unauthenticated_client):
+    response = unauthenticated_client.post("/api/v1/assistant/conversations")
+    assert response.status_code == 401
+
+
+def test_start_new_conversation_clears_history_but_keeps_old_messages(client):
+    client.post("/api/v1/assistant/messages", json={"content": "pergunta da conversa antiga"})
+
+    response = client.post("/api/v1/assistant/conversations")
+    assert response.status_code == 204
+
+    assert client.get("/api/v1/assistant/messages").json()["messages"] == []
+
+    client.post("/api/v1/assistant/messages", json={"content": "pergunta da conversa nova"})
+    history = client.get("/api/v1/assistant/messages").json()["messages"]
+    assert [m["content"] for m in history] == ["pergunta da conversa nova", "resposta mockada do assistente"]

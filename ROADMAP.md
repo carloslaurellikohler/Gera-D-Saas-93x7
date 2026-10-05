@@ -112,7 +112,12 @@ não são aceitos — limitação da engine, comunicada como erro 4xx claro, nun
   sempre que o PDF mudar (sem endpoint HTTP, sem trigger automático). Contexto pessoal
   (`AssistantService`) reaproveita `scores_by_criterion`/`overall_score` via
   `MetricsRepository` — nunca a transcrição bruta nem campos de texto livre da engine. Rotas
-  `GET`/`POST /assistant/messages`. Tela `AssistantPage` (`/assistente`).
+  `GET`/`POST /assistant/messages`. Tela `AssistantPage` (`/assistente`). Botão "Nova
+  Conversa" (rota `POST /assistant/conversations`) adiciona `conversation_id` em
+  `chat_messages` e `current_assistant_conversation_id` em `users` — `NULL` continua
+  significando o histórico único de antes da feature (sem backfill artificial, mesmo
+  racional de `analyses.methodology_version_id`), e cada clique gera um novo UUID que passa
+  a escopar tanto a listagem de histórico quanto a janela de contexto enviada ao LLM.
 - **Fase 7 — Migração da calibração para Postgres** — tabelas `Methodology` (identidade +
   ciclo de vida DRAFT/PUBLISHED/ARCHIVED + prosa global do YAML num JSONB `content`),
   `MethodologyCategory` (6 por versão, os critérios comportamentais) e `Calibrator` (4 por

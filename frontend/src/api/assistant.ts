@@ -8,3 +8,7 @@ export function getChatHistory() {
 export function sendChatMessage(content: string) {
   return apiPost<ChatMessageResponse>("/assistant/messages", { content });
 }
+
+export function startNewConversation() {
+  return apiPost<void>("/assistant/conversations");
+}

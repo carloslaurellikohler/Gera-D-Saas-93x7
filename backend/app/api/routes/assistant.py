@@ -36,3 +36,11 @@ def send_chat_message(
     except DailyMessageLimitError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
     return ChatMessageResponse.model_validate(message)
+
+
+@router.post("/conversations", status_code=204)
+def start_new_conversation(
+    service: AssistantService = Depends(get_assistant_service),
+    current_user: User = Depends(get_current_user),
+):
+    service.start_new_conversation(user=current_user)

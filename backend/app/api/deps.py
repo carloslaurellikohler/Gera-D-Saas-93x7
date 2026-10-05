@@ -97,6 +97,7 @@ def get_assistant_service(
         chat_repo=ChatMessageRepository(db),
         chunk_repo=MethodologyChunkRepository(db),
         metrics_repo=MetricsRepository(db),
+        user_repo=UserRepository(db),
         settings=settings,
     )
 

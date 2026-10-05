@@ -52,6 +52,7 @@ def service(db_session, fake_chat_model, fake_embedding_model) -> AssistantServi
         chat_repo=ChatMessageRepository(db_session),
         chunk_repo=MethodologyChunkRepository(db_session),
         metrics_repo=MetricsRepository(db_session),
+        user_repo=UserRepository(db_session),
         settings=Settings(ASSISTANT_DAILY_MESSAGE_LIMIT=3, ASSISTANT_TOP_K_CHUNKS=1),
         chat_model=fake_chat_model,
         embedding_model=fake_embedding_model,
@@ -145,3 +146,40 @@ def test_personal_context_without_completed_analyses(service, regular_user):
     context = service._personal_context(regular_user)
 
     assert "não tem análises concluídas" in context
+
+
+def test_start_new_conversation_sets_a_fresh_conversation_id(service, regular_user, db_session):
+    assert regular_user.current_assistant_conversation_id is None
+
+    service.start_new_conversation(user=regular_user)
+    db_session.refresh(regular_user)
+
+    assert regular_user.current_assistant_conversation_id is not None
+
+
+def test_ask_after_new_conversation_hides_previous_conversation_from_history(service, regular_user, db_session):
+    service.ask(user=regular_user, content="pergunta da conversa antiga")
+    assert len(service.list_history(user=regular_user)) == 2
+
+    service.start_new_conversation(user=regular_user)
+    db_session.refresh(regular_user)
+
+    assert service.list_history(user=regular_user) == []
+
+    service.ask(user=regular_user, content="pergunta da conversa nova")
+    history = service.list_history(user=regular_user)
+    assert [m.content for m in history] == ["pergunta da conversa nova", "resposta do assistente"]
+
+
+def test_ask_after_new_conversation_does_not_leak_old_topic_into_prompt(
+    service, regular_user, db_session, fake_chat_model
+):
+    service.ask(user=regular_user, content="pergunta da conversa antiga")
+    service.start_new_conversation(user=regular_user)
+    db_session.refresh(regular_user)
+
+    service.ask(user=regular_user, content="pergunta da conversa nova")
+
+    prompt_messages = fake_chat_model.invoke.call_args.args[0]
+    human_contents = [content for role, content in prompt_messages if role == "human"]
+    assert human_contents == ["pergunta da conversa nova"]

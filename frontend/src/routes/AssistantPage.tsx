@@ -5,6 +5,7 @@ import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
 import { useChatHistory } from "../hooks/useChatHistory";
 import { useSendChatMessage } from "../hooks/useSendChatMessage";
+import { useStartNewConversation } from "../hooks/useStartNewConversation";
 
 const SUGGESTIONS = [
   "Sugira 3 perguntas de sondagem",
@@ -15,6 +16,7 @@ const SUGGESTIONS = [
 export default function AssistantPage() {
   const history = useChatHistory();
   const sendMessage = useSendChatMessage();
+  const startNewConversation = useStartNewConversation();
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
@@ -22,7 +24,7 @@ export default function AssistantPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView?.({ block: "end" });
-  }, [history.data?.messages.length]);
+  }, [history.data?.messages.length, sendMessage.isPending]);
 
   async function handleSend(content: string) {
     const trimmed = content.trim();
@@ -40,10 +42,27 @@ export default function AssistantPage() {
     }
   }
 
+  async function handleStartNewConversation() {
+    setInput("");
+    setError(null);
+    setRateLimited(false);
+    await startNewConversation.mutateAsync();
+  }
+
   const messages = history.data?.messages ?? [];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 280px", gap: 20, flex: 1, minHeight: 0 }}>
+    // height fixa (não flex/minHeight) para o overflow:auto da área de mensagens, abaixo,
+    // conseguir rolar internamente em vez de a página toda crescer; 64px = padding
+    // vertical (32px topo + 32px base) de .app-main em App.css.
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) 280px",
+        gap: 20,
+        height: "calc(100svh - 64px)",
+      }}
+    >
       <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div
           style={{
@@ -75,6 +94,16 @@ export default function AssistantPage() {
               Dúvidas sobre a metodologia 93x7® e seus resultados
             </span>
           </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginLeft: "auto", fontSize: 13, height: 36, padding: "0 14px" }}
+            disabled={sendMessage.isPending || startNewConversation.isPending || messages.length === 0}
+            onClick={handleStartNewConversation}
+          >
+            <Icon name="add_comment" size={16} style={{ marginRight: 6 }} />
+            Nova Conversa
+          </button>
         </div>
 
         <div style={{ flex: 1, padding: 24, display: "flex", flexDirection: "column", gap: 18, overflow: "auto" }}>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -39,7 +40,7 @@ def test_create_and_list_all_in_chronological_order(db_session, regular_user):
         )
     )
 
-    messages = repo.list_all(user_id=regular_user.id)
+    messages = repo.list_all(user_id=regular_user.id, conversation_id=None)
 
     assert [m.content for m in messages] == ["primeira", "segunda"]
 
@@ -49,8 +50,29 @@ def test_list_all_is_scoped_to_user(db_session, regular_user, other_user):
     repo.create(ChatMessage(user_id=regular_user.id, role=ChatMessageRole.USER, content="minha"))
     repo.create(ChatMessage(user_id=other_user.id, role=ChatMessageRole.USER, content="do outro"))
 
-    assert [m.content for m in repo.list_all(user_id=regular_user.id)] == ["minha"]
-    assert [m.content for m in repo.list_all(user_id=other_user.id)] == ["do outro"]
+    assert [m.content for m in repo.list_all(user_id=regular_user.id, conversation_id=None)] == ["minha"]
+    assert [m.content for m in repo.list_all(user_id=other_user.id, conversation_id=None)] == ["do outro"]
+
+
+def test_list_all_is_scoped_to_conversation(db_session, regular_user):
+    repo = ChatMessageRepository(db_session)
+    old_conversation = uuid.uuid4()
+    new_conversation = uuid.uuid4()
+    repo.create(ChatMessage(user_id=regular_user.id, role=ChatMessageRole.USER, content="legado", conversation_id=None))
+    repo.create(
+        ChatMessage(
+            user_id=regular_user.id, role=ChatMessageRole.USER, content="antiga", conversation_id=old_conversation
+        )
+    )
+    repo.create(
+        ChatMessage(
+            user_id=regular_user.id, role=ChatMessageRole.USER, content="nova", conversation_id=new_conversation
+        )
+    )
+
+    assert [m.content for m in repo.list_all(user_id=regular_user.id, conversation_id=None)] == ["legado"]
+    assert [m.content for m in repo.list_all(user_id=regular_user.id, conversation_id=old_conversation)] == ["antiga"]
+    assert [m.content for m in repo.list_all(user_id=regular_user.id, conversation_id=new_conversation)] == ["nova"]
 
 
 def test_list_recent_respects_limit_and_order(db_session, regular_user):
@@ -70,7 +92,7 @@ def test_list_recent_respects_limit_and_order(db_session, regular_user):
             )
         )
 
-    recent = repo.list_recent(user_id=regular_user.id, limit=3)
+    recent = repo.list_recent(user_id=regular_user.id, conversation_id=None, limit=3)
 
     assert [m.content for m in recent] == ["msg-2", "msg-3", "msg-4"]
 

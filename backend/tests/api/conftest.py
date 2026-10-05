@@ -69,6 +69,7 @@ def assistant_service(db_session) -> AssistantService:
         chat_repo=ChatMessageRepository(db_session),
         chunk_repo=MethodologyChunkRepository(db_session),
         metrics_repo=MetricsRepository(db_session),
+        user_repo=UserRepository(db_session),
         settings=Settings(ASSISTANT_DAILY_MESSAGE_LIMIT=30),
         chat_model=chat_model,
         embedding_model=embedding_model,
