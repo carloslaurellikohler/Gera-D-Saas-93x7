@@ -95,6 +95,7 @@ export interface AnalysisResultData {
   cs_name: string;
   overall_score: number;
   overall_band_label: string;
+  overall_farol_level: string;
   overall_classification_text: string;
   executive_diagnosis: string;
   general_reading: string;

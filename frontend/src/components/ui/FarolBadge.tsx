@@ -30,13 +30,6 @@ export function toFarolLevel(level: string): FarolLevel {
   return level in VARIANTS ? (level as FarolLevel) : "outro";
 }
 
-export function farolLevelForScore(score: number): FarolLevel {
-  if (score >= 85) return "excelente";
-  if (score >= 70) return "atencao";
-  if (score >= 50) return "prioritario";
-  return "critico";
-}
-
 interface Props {
   level: FarolLevel;
 }

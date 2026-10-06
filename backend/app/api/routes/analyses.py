@@ -5,11 +5,15 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_analysis_service, get_current_user
 from app.core.constants import Objective
+from app.core.farol import get_farol_level
+from app.db.session import get_db
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.user import User, UserRole
+from app.repositories.methodology_repository import MethodologyRepository
 from app.schemas.analysis import (
     AnalysisListItem,
     AnalysisResponse,
@@ -131,13 +135,19 @@ def get_report(
     response_format: str = Query("pdf", pattern="^(pdf|json)$", alias="format"),
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     analysis = _get_owned_or_404(service, analysis_id, current_user)
     if analysis.status != AnalysisStatus.COMPLETED:
         raise HTTPException(status_code=409, detail="A análise ainda não foi concluída.")
 
     if response_format == "json":
-        return AnalysisResultResponse(id=analysis.id, analysis_result=analysis.analysis_result)
+        label_color_map = MethodologyRepository(db).get_label_color_map()
+        overall_farol_level = get_farol_level(
+            analysis.analysis_result.get("overall_band_label"), label_color_map
+        )
+        analysis_result = {**analysis.analysis_result, "overall_farol_level": overall_farol_level}
+        return AnalysisResultResponse(id=analysis.id, analysis_result=analysis_result)
 
     ref = analysis.executive_report_path if kind == "executivo" else analysis.detailed_report_path
     if ref is None:

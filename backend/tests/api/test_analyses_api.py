@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from app.models.analysis import Analysis, AnalysisStatus
+from app.models.methodology import Calibrator, FarolColor, Methodology, MethodologyStatus
+from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.methodology_repository import MethodologyRepository
+
 
 def _create_analysis(client, *, participant_name="João Silva", objective="Onboarding", **extra):
     data = {"participant_name": participant_name, "objective": objective, **extra}
@@ -96,6 +103,44 @@ def test_report_returns_409_before_completed(client):
     response = client.get(f"/api/v1/analyses/{created['id']}/report")
 
     assert response.status_code == 409
+
+
+def test_report_json_includes_overall_farol_level(client_factory, db_session):
+    owner_client, owner = client_factory()
+
+    db_session.add(
+        Methodology(
+            calibration_version="v1",
+            methodology_name="93x7®",
+            project="Projeto Teste",
+            status=MethodologyStatus.PUBLISHED,
+            content={"objective": "Avaliar."},
+            calibrators=[
+                Calibrator(key="excelente", label="Excelente desempenho", color=FarolColor.VERDE, min=8.0, max=10.0, order_index=0),
+            ],
+        )
+    )
+    db_session.commit()
+
+    analysis = AnalysisRepository(db_session).create(
+        Analysis(
+            participant_name="Ana",
+            objective="Onboarding",
+            input_type="txt",
+            interaction_id="interaction-1",
+            user_id=owner.id,
+            status=AnalysisStatus.COMPLETED,
+            completed_at=datetime.now(timezone.utc),
+            analysis_result={"overall_score": 8.5, "overall_band_label": "Excelente desempenho"},
+        )
+    )
+
+    response = owner_client.get(f"/api/v1/analyses/{analysis.id}/report", params={"format": "json"})
+
+    assert response.status_code == 200
+    body = response.json()["analysis_result"]
+    assert body["overall_band_label"] == "Excelente desempenho"
+    assert body["overall_farol_level"] == "excelente"
 
 
 def test_delete_analysis_removes_record_and_file(client, api_service):

@@ -1,6 +1,7 @@
 import type { AnalysisResponse, AnalysisResultData } from "../../types/analysis";
 import { formatDurationSeconds } from "../../lib/format";
 import ScoreCard from "../ui/ScoreCard";
+import { toFarolLevel } from "../ui/FarolBadge";
 import Icon from "../ui/Icon";
 
 interface Props {
@@ -30,7 +31,13 @@ export default function SummaryTab({ analysis, result, resultLoading }: Props) {
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20 }}>
-        <ScoreCard label="Nota geral" sub={result.overall_band_label} score={Math.round(result.overall_score)} size="lg" />
+        <ScoreCard
+          label="Nota geral"
+          sub={result.overall_band_label}
+          score={Math.round(result.overall_score)}
+          level={toFarolLevel(result.overall_farol_level)}
+          size="lg"
+        />
         {result.scores_by_criterion.slice(0, 3).map((c) => (
           <ScoreCard key={c.key} label={c.label} score={Math.round(c.score)} />
         ))}
@@ -44,7 +51,7 @@ export default function SummaryTab({ analysis, result, resultLoading }: Props) {
               <div key={c.key} style={{ display: "grid", gridTemplateColumns: "150px 1fr 30px", gap: 12, alignItems: "center", fontSize: 13 }}>
                 <span style={{ fontWeight: 500 }}>{c.label}</span>
                 <span style={{ height: 8, borderRadius: 4, background: "var(--gray-100)", overflow: "hidden" }}>
-                  <span style={{ display: "block", height: "100%", width: `${c.score}%`, background: "var(--gerad-navy)" }} />
+                  <span style={{ display: "block", height: "100%", width: `${(c.score / 10) * 100}%`, background: "var(--gerad-navy)" }} />
                 </span>
                 <b style={{ textAlign: "right" }}>{Math.round(c.score)}</b>
               </div>

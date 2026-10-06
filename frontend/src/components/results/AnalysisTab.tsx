@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { AnalysisResultData } from "../../types/analysis";
-import FarolBadge, { farolLevelForScore } from "../ui/FarolBadge";
 import Icon from "../ui/Icon";
 
 interface Props {
@@ -34,7 +33,6 @@ export default function AnalysisTab({ result, loading }: Props) {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {result.scores_by_criterion.map((c, i) => {
-          const level = farolLevelForScore(c.score);
           const open = openKey === c.key;
           return (
             <div key={c.key} className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -60,7 +58,6 @@ export default function AnalysisTab({ result, loading }: Props) {
                 </span>
                 <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{c.label}</span>
                 <b style={{ fontFamily: "var(--font-brand)", fontSize: 22 }}>{Math.round(c.score)}</b>
-                <FarolBadge level={level} />
                 <Icon name={open ? "expand_less" : "expand_more"} size={22} color="var(--content-secondary)" />
               </div>
               {open && (
