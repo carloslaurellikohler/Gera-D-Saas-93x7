@@ -169,7 +169,12 @@ Foi produzido um prompt detalhado para o Claude Design cobrindo:
 - Auth é stateless (JWT em cookie httpOnly), não sessão via Redis.
 - Sem autocadastro público — usuários são criados por admin (ou seed script).
 - `.wav`/`.m4a` não são suportados; não introduzir transcodificação (ffmpeg) para contornar
-  isso sem sinalizar antes ao usuário.
+  isso sem sinalizar antes ao usuário. **Atualização**: ffmpeg foi introduzido no worker
+  (`backend/app/engine_integration/audio_chunking.py`), mas com escopo estrito, sinalizado e
+  aprovado explicitamente pelo usuário: só para contornar o limite hard de 25MB por arquivo da
+  API Whisper em `.mp3`/`.mp4` já suportados (extrai/comprime a trilha de áudio e faz chunking
+  por duração antes de chamar a engine, uma vez por chunk), não para habilitar novos formatos
+  de entrada. A limitação de `.wav`/`.m4a` permanece — decisão distinta, que não foi reaberta.
 - Testes de repositório usam Postgres descartável, nunca SQLite.
 - Nota geral de uma análise vem do julgamento holístico das etapas de IA, nunca de uma
   fórmula aritmética simples sobre os pilares — por isso as tabelas de metodologia (Fase 7)

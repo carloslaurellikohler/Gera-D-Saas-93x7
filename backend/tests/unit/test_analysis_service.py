@@ -63,7 +63,16 @@ def current_user(db_session) -> User:
     )
 
 
-def _create_uploaded_analysis(service: AnalysisService, storage: LocalDiskStorage, current_user: User):
+def _write_temp_upload(tmp_path: Path, name: str, content: bytes) -> Path:
+    temp_path = tmp_path / name
+    temp_path.write_bytes(content)
+    return temp_path
+
+
+def _create_uploaded_analysis(
+    service: AnalysisService, storage: LocalDiskStorage, current_user: User, tmp_path: Path
+):
+    content = b"CS: Oi\nPB: Oi"
     analysis = service.create_and_store(
         current_user=current_user,
         participant_name="João Silva",
@@ -72,7 +81,9 @@ def _create_uploaded_analysis(service: AnalysisService, storage: LocalDiskStorag
         duration_minutes=45,
         interaction_date=None,
         file_name="transcricao.txt",
-        file_content=b"CS: Oi\nPB: Oi",
+        temp_file_path=_write_temp_upload(tmp_path, "transcricao.txt", content),
+        file_size_bytes=len(content),
+        file_header=content[:4096],
     )
     return analysis
 
@@ -99,8 +110,10 @@ def _fake_result(tmp_path: Path):
     return result, export_reports
 
 
-def test_create_and_store_uploads_file_and_sets_status(service: AnalysisService, storage, current_user):
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+def test_create_and_store_uploads_file_and_sets_status(
+    service: AnalysisService, storage, tmp_path: Path, current_user
+):
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
 
     assert analysis.status == AnalysisStatus.UPLOADED
     assert analysis.input_type == "txt"
@@ -111,7 +124,9 @@ def test_create_and_store_uploads_file_and_sets_status(service: AnalysisService,
     assert analysis.duration_seconds == 45 * 60
 
 
-def test_create_and_store_accepts_real_mp3_signature(service: AnalysisService, storage, current_user):
+def test_create_and_store_accepts_real_mp3_signature(
+    service: AnalysisService, storage, tmp_path: Path, current_user
+):
     # Cabeçalho ID3v2 real (gerado com ffmpeg) — prova que validate_upload aceita áudio de
     # verdade, não só a extensão declarada (ver services/validation.py).
     mp3_content = b"ID3\x04\x00\x00\x00\x00\x00\x23" + b"\x00" * 100
@@ -123,7 +138,9 @@ def test_create_and_store_accepts_real_mp3_signature(service: AnalysisService, s
         duration_minutes=None,
         interaction_date=None,
         file_name="chamada.mp3",
-        file_content=mp3_content,
+        temp_file_path=_write_temp_upload(tmp_path, "chamada.mp3", mp3_content),
+        file_size_bytes=len(mp3_content),
+        file_header=mp3_content[:4096],
     )
 
     assert analysis.status == AnalysisStatus.UPLOADED
@@ -132,7 +149,7 @@ def test_create_and_store_accepts_real_mp3_signature(service: AnalysisService, s
 
 
 def test_run_analysis_job_happy_path_reaches_completed(service: AnalysisService, storage, tmp_path, current_user):
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
 
     transcript = _fake_transcript()
     result, export_reports_fn = _fake_result(tmp_path)
@@ -159,7 +176,7 @@ def test_run_analysis_job_happy_path_reaches_completed(service: AnalysisService,
 
 
 def test_run_analysis_job_records_status_sequence(service: AnalysisService, storage, tmp_path, current_user):
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
     observed_statuses: list[AnalysisStatus] = []
 
     original_update_status = service.repo.update_status
@@ -186,9 +203,9 @@ def test_run_analysis_job_records_status_sequence(service: AnalysisService, stor
 
 
 def test_run_analysis_job_transcription_failure_sets_failed_with_safe_message(
-    service: AnalysisService, storage, current_user
+    service: AnalysisService, storage, tmp_path: Path, current_user
 ):
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
     service.engine.load_transcript.side_effect = RuntimeError(
         "segredo interno: chave de API invalida xyz123"
     )
@@ -204,9 +221,9 @@ def test_run_analysis_job_transcription_failure_sets_failed_with_safe_message(
 
 
 def test_run_analysis_job_pipeline_failure_sets_failed_with_safe_message(
-    service: AnalysisService, storage, current_user
+    service: AnalysisService, storage, tmp_path: Path, current_user
 ):
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
     service.engine.load_transcript.return_value = _fake_transcript()
     service.engine.run_pipeline.side_effect = RuntimeError("boom")
 
@@ -221,9 +238,9 @@ def test_run_analysis_job_pipeline_failure_sets_failed_with_safe_message(
 
 
 def test_run_analysis_job_reports_failure_sets_failed_with_safe_message(
-    service: AnalysisService, storage, current_user
+    service: AnalysisService, storage, tmp_path: Path, current_user
 ):
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
     service.engine.load_transcript.return_value = _fake_transcript()
     result = MagicMock()
     result.model_dump.return_value = {"overall_score": 5.0}
@@ -240,9 +257,9 @@ def test_run_analysis_job_reports_failure_sets_failed_with_safe_message(
 
 
 def test_create_and_store_uses_current_user_as_cs_identity(
-    service: AnalysisService, storage, current_user
+    service: AnalysisService, storage, tmp_path: Path, current_user
 ):
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
 
     assert analysis.user_id == current_user.id
     assert analysis.cs_id == str(current_user.id)
@@ -263,7 +280,7 @@ def test_run_pipeline_does_not_depend_on_settings_defaults(
     engine.methodology_id = _seed_methodology(db_session).id
     service = AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
 
-    analysis = _create_uploaded_analysis(service, storage, current_user)
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
 
     transcript = _fake_transcript()
     result, export_reports_fn = _fake_result(tmp_path)

@@ -19,6 +19,7 @@ from app.schemas.analysis import (
 )
 from app.schemas.common import PaginatedResponse
 from app.services.analysis_service import AnalysisService
+from app.services.upload_streaming import buffer_upload
 from app.services.validation import CorruptedFileError, FileTooLargeError, UnsupportedFileTypeError
 from app.workers.tasks import process_analysis_task
 
@@ -56,18 +57,22 @@ def create_analysis(
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
 ):
-    content = file.file.read()
     try:
-        analysis = service.create_and_store(
-            current_user=current_user,
-            participant_name=participant_name,
-            objective=objective.value,
-            objective_complement=objective_complement,
-            duration_minutes=duration_minutes,
-            interaction_date=interaction_date,
-            file_name=file.filename or "arquivo",
-            file_content=content,
-        )
+        with buffer_upload(
+            file.file, service.settings.MAX_UPLOAD_MB, service.settings.STORAGE_DIR
+        ) as streamed:
+            analysis = service.create_and_store(
+                current_user=current_user,
+                participant_name=participant_name,
+                objective=objective.value,
+                objective_complement=objective_complement,
+                duration_minutes=duration_minutes,
+                interaction_date=interaction_date,
+                file_name=file.filename or "arquivo",
+                temp_file_path=streamed.path,
+                file_size_bytes=streamed.size_bytes,
+                file_header=streamed.header,
+            )
     except (UnsupportedFileTypeError, FileTooLargeError, CorruptedFileError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

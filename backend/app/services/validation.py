@@ -75,9 +75,8 @@ _SIGNATURE_CHECKS = {
 }
 
 
-def validate_upload(*, file_name: str, content: bytes, max_upload_mb: int) -> str:
-    """Retorna o input_type (ex.: "txt") se válido; levanta um erro de validação caso contrário."""
-    size_mb = len(content) / (1024 * 1024)
+def _validate(*, file_name: str, size_bytes: int, header: bytes, max_upload_mb: int) -> str:
+    size_mb = size_bytes / (1024 * 1024)
     if size_mb > max_upload_mb:
         raise FileTooLargeError(size_mb, max_upload_mb)
 
@@ -86,7 +85,29 @@ def validate_upload(*, file_name: str, content: bytes, max_upload_mb: int) -> st
         raise UnsupportedFileTypeError(extension)
 
     input_type = ALLOWED_EXTENSIONS[extension]
-    if not _SIGNATURE_CHECKS[input_type](content):
+    if not _SIGNATURE_CHECKS[input_type](header):
         raise CorruptedFileError(extension)
 
     return input_type
+
+
+def validate_upload(*, file_name: str, content: bytes, max_upload_mb: int) -> str:
+    """Retorna o input_type (ex.: "txt") se válido; levanta um erro de validação caso contrário.
+
+    Para uploads lidos em streaming (ver upload_streaming.py), use validate_upload_streamed."""
+    return _validate(
+        file_name=file_name,
+        size_bytes=len(content),
+        header=content[:4096],
+        max_upload_mb=max_upload_mb,
+    )
+
+
+def validate_upload_streamed(
+    *, file_name: str, size_bytes: int, header: bytes, max_upload_mb: int
+) -> str:
+    """Mesma validação de validate_upload, mas para quando o tamanho e os primeiros bytes já
+    foram apurados incrementalmente (streaming), sem o arquivo inteiro em memória."""
+    return _validate(
+        file_name=file_name, size_bytes=size_bytes, header=header, max_upload_mb=max_upload_mb
+    )

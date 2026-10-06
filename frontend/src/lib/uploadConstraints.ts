@@ -8,4 +8,4 @@ export const EXTENSIONS_BY_CHOICE: Record<InputTypeChoice, string[]> = {
   video: [".mp4"],
 };
 
-export const MAX_UPLOAD_MB = 100;
+export const MAX_UPLOAD_MB = 1024;

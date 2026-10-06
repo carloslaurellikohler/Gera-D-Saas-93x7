@@ -35,8 +35,17 @@ from app.storage.local_storage import LocalDiskStorage
 
 @pytest.fixture()
 def api_service(db_session, tmp_path: Path) -> AnalysisService:
-    settings = Settings(DEFAULT_CS_ID="cs-1", DEFAULT_CS_NAME="Consultor Teste", MAX_UPLOAD_MB=100)
-    storage = LocalDiskStorage(tmp_path / "storage")
+    # STORAGE_DIR precisa apontar para o mesmo diretório usado por `storage` abaixo: a rota
+    # de upload (buffer_upload) grava o arquivo temporário em settings.STORAGE_DIR antes de
+    # `create_and_store` movê-lo para dentro do storage via `save_file`.
+    storage_dir = tmp_path / "storage"
+    settings = Settings(
+        DEFAULT_CS_ID="cs-1",
+        DEFAULT_CS_NAME="Consultor Teste",
+        MAX_UPLOAD_MB=100,
+        STORAGE_DIR=str(storage_dir),
+    )
+    storage = LocalDiskStorage(storage_dir)
     engine = MagicMock()
     return AnalysisService(
         repo=AnalysisRepository(db_session), storage=storage, engine=engine, settings=settings

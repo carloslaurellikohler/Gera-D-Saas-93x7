@@ -170,7 +170,10 @@ export default function NewAnalysisPage() {
             <br />
             Áudio e vídeo: <b>.mp3, .mp4</b>
             <br />
-            Tamanho máximo: <b>500 MB</b>
+            Tamanho máximo:{" "}
+            <b>
+              {MAX_UPLOAD_MB >= 1024 ? `${MAX_UPLOAD_MB / 1024} GB` : `${MAX_UPLOAD_MB} MB`}
+            </b>
           </p>
         </div>
         <div className="card">

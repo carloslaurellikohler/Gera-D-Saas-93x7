@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     DEFAULT_CS_ID: str = "cs-padrao"
     DEFAULT_CS_NAME: str = "Consultor GerAD"
 
-    MAX_UPLOAD_MB: int = 100
+    MAX_UPLOAD_MB: int = 1024
+
+    TASK_TIME_LIMIT_SECONDS: int = 3600
+    TASK_SOFT_TIME_LIMIT_SECONDS: int = 3300
 
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 

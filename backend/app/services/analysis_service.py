@@ -18,7 +18,7 @@ from app.engine_integration.mappers import build_input_metadata, slugify
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.user import User
 from app.repositories.analysis_repository import AnalysisRepository
-from app.services.validation import sanitize_filename, validate_upload
+from app.services.validation import sanitize_filename, validate_upload_streamed
 from app.storage.base import FileStorage
 
 log = logging.getLogger(__name__)
@@ -58,11 +58,14 @@ class AnalysisService:
         duration_minutes: int | None,
         interaction_date: date | None,
         file_name: str,
-        file_content: bytes,
+        temp_file_path: Path,
+        file_size_bytes: int,
+        file_header: bytes,
     ) -> Analysis:
-        input_type = validate_upload(
+        input_type = validate_upload_streamed(
             file_name=file_name,
-            content=file_content,
+            size_bytes=file_size_bytes,
+            header=file_header,
             max_upload_mb=self.settings.MAX_UPLOAD_MB,
         )
         safe_name = sanitize_filename(file_name)
@@ -86,7 +89,7 @@ class AnalysisService:
         )
         analysis = self.repo.create(analysis)
 
-        file_ref = self.storage.save_bytes(f"{analysis.id}/{safe_name}", file_content)
+        file_ref = self.storage.save_file(temp_file_path, f"{analysis.id}/{safe_name}")
         return self.repo.update(analysis.id, file_path=file_ref, status=AnalysisStatus.UPLOADED)
 
     def run_analysis_job(self, analysis_id: uuid.UUID) -> None:

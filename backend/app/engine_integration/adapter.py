@@ -22,6 +22,7 @@ from gera_d_engine.schemas.analysis import AnalysisResult
 from gera_d_engine.schemas.transcript import InputMetadata, Transcript
 from sqlalchemy.orm import Session
 
+from app.engine_integration.audio_chunking import load_transcript_chunked, needs_chunking
 from app.engine_integration.calibration_builder import build_calibration
 
 
@@ -52,6 +53,8 @@ class EngineAdapter:
         return cls(calibration=build_calibration(methodology), methodology_id=methodology.id)
 
     def load_transcript(self, file_path: Path) -> Transcript:
+        if needs_chunking(file_path):
+            return load_transcript_chunked(file_path, self._settings)
         return load_transcript(file_path, self._settings)
 
     def run_pipeline(self, transcript: Transcript, metadata: InputMetadata) -> AnalysisResult:

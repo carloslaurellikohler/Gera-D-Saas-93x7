@@ -17,8 +17,8 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    task_time_limit=900,
-    task_soft_time_limit=840,
+    task_time_limit=settings.TASK_TIME_LIMIT_SECONDS,
+    task_soft_time_limit=settings.TASK_SOFT_TIME_LIMIT_SECONDS,
 )
 
 celery_app.autodiscover_tasks(["app.workers"])

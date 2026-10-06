@@ -8,6 +8,7 @@ from app.services.validation import (
     UnsupportedFileTypeError,
     sanitize_filename,
     validate_upload,
+    validate_upload_streamed,
 )
 
 
@@ -54,3 +55,23 @@ def test_validate_upload_rejects_mismatched_content():
     # extensão .mp3 mas conteúdo não tem assinatura de mp3 real
     with pytest.raises(CorruptedFileError):
         validate_upload(file_name="malicious.mp3", content=b"#!/bin/sh\nrm -rf /", max_upload_mb=10)
+
+
+def test_validate_upload_streamed_mirrors_validate_upload():
+    content = b"PK\x03\x04" + b"\x00" * 20
+    assert (
+        validate_upload_streamed(
+            file_name="t.docx", size_bytes=len(content), header=content, max_upload_mb=10
+        )
+        == "docx"
+    )
+
+
+def test_validate_upload_streamed_rejects_too_large():
+    with pytest.raises(FileTooLargeError):
+        validate_upload_streamed(
+            file_name="t.txt",
+            size_bytes=2 * 1024 * 1024,
+            header=b"x" * 100,
+            max_upload_mb=1,
+        )
