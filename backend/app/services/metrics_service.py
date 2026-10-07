@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 
 from app.models.user import User, UserRole
 from app.repositories.metrics_repository import MetricsRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.metrics import (
     CriterionRadarPoint,
     MetricsEvolutionResponse,
@@ -32,8 +33,9 @@ _CRITERION_ORDER = [
 
 
 class MetricsService:
-    def __init__(self, repo: MetricsRepository) -> None:
+    def __init__(self, repo: MetricsRepository, user_repo: UserRepository) -> None:
         self.repo = repo
+        self.user_repo = user_repo
 
     def get_evolution(self, *, current_user: User, period: Period = "6m") -> MetricsEvolutionResponse:
         days = _PERIOD_DAYS[period]
@@ -41,9 +43,14 @@ class MetricsService:
         current_since = today - timedelta(days=days)
         previous_since = current_since - timedelta(days=days)
 
-        user_id = None if current_user.role == UserRole.ADMIN else current_user.id
+        if current_user.role == UserRole.ADMIN:
+            owner_ids = None
+        elif current_user.role == UserRole.GESTOR:
+            owner_ids = [u.id for u in self.user_repo.list_subordinates(current_user.id)]
+        else:  # COLABORADOR
+            owner_ids = [current_user.id]
 
-        rows = self.repo.completed_rows(user_id=user_id, since=previous_since)
+        rows = self.repo.completed_rows(owner_ids=owner_ids, since=previous_since)
         current_rows = [r for r in rows if _as_date(r.completed_at) >= current_since]
         previous_rows = [r for r in rows if _as_date(r.completed_at) < current_since]
 

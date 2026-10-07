@@ -40,9 +40,21 @@ class ProfessionalBoardRow(BaseModel):
     trend: Literal["up", "down", "flat"] | None
 
 
+class TeamBoardRow(BaseModel):
+    # Colaborador da equipe do GESTOR (Analysis.owner_id) — mesmos campos de
+    # ProfessionalBoardRow, trocando o agrupamento de PB avaliado para usuário dono.
+    user_id: str
+    name: str
+    count: int
+    avg_score: float | None
+    level: str | None
+    trend: Literal["up", "down", "flat"] | None
+
+
 class DashboardStatsResponse(BaseModel):
     period: Period
     volume_by_status: list[VolumeByStatus]
     farol_distribution: list[FarolDistributionItem]
     trend: list[TrendPoint]
     board: list[ProfessionalBoardRow] | None = None
+    team_board: list[TeamBoardRow] | None = None

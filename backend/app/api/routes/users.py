@@ -13,6 +13,8 @@ from app.schemas.user import AdminResetPasswordIn, UserCreateIn, UserResponse, U
 from app.services.user_service import (
     CannotDeactivateSelfError,
     EmailAlreadyExistsError,
+    GestorComEquipeError,
+    InvalidManagerAssignmentError,
     UserNotFoundError,
     UserService,
 )
@@ -31,6 +33,14 @@ def list_users(
     return service.list_users(role=role, status=status, search=search)
 
 
+@router.get("/me/team", response_model=list[UserResponse])
+def list_my_team(
+    service: UserService = Depends(get_user_service),
+    current_user: User = Depends(require_role(UserRole.GESTOR)),
+):
+    return service.list_subordinates(current_user.id)
+
+
 @router.post("", response_model=UserResponse, status_code=201)
 def create_user(
     payload: UserCreateIn,
@@ -41,6 +51,8 @@ def create_user(
         return service.create_user(**payload.model_dump())
     except EmailAlreadyExistsError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InvalidManagerAssignmentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -55,6 +67,10 @@ def update_user(
     except UserNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except EmailAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InvalidManagerAssignmentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except GestorComEquipeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
@@ -81,6 +97,8 @@ def deactivate_user(
     except UserNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except CannotDeactivateSelfError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except GestorComEquipeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 

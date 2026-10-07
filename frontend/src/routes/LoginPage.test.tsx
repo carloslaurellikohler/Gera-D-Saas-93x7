@@ -40,8 +40,9 @@ describe("LoginPage", () => {
       id: "1",
       name: "Ana",
       email: "ana@example.com",
-      role: "USER",
+      role: "COLABORADOR",
       status: "ACTIVE",
+      manager_id: null,
       created_at: "2026-01-01T00:00:00Z",
       last_login_at: null,
     });

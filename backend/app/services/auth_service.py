@@ -32,7 +32,9 @@ class AuthService:
         token = create_access_token(user_id=str(user.id), role=user.role.value, settings=self.settings)
         return user, token
 
-    def create_user(self, *, name: str, email: str, password: str, role: UserRole = UserRole.USER) -> User:
+    def create_user(
+        self, *, name: str, email: str, password: str, role: UserRole = UserRole.COLABORADOR
+    ) -> User:
         existing = self.repo.get_by_email(email)
         if existing is not None:
             raise ValueError(f"User with email {email} already exists")

@@ -22,7 +22,7 @@ def _seed_completed(db_session, *, user_id, interaction_id: str, overall_score: 
             objective="Onboarding",
             input_type="txt",
             interaction_id=interaction_id,
-            user_id=user_id,
+            owner_id=user_id,
             status=AnalysisStatus.COMPLETED,
             completed_at=datetime.now(timezone.utc),
             analysis_result=analysis_result,

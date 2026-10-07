@@ -6,6 +6,7 @@ import EmptyState from "../components/ui/EmptyState";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
 import Modal from "../components/ui/Modal";
+import { ROLE_BADGE_CLASS } from "../components/ui/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { useConfirm } from "../context/ConfirmContext";
 import { useActivateUser } from "../hooks/useActivateUser";
@@ -30,14 +31,17 @@ const iconButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-type FilterKey = "all" | "ADMIN" | "USER" | "INACTIVE";
+type FilterKey = "all" | "ADMIN" | "GESTOR" | "COLABORADOR" | "INACTIVE";
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "Todos" },
   { key: "ADMIN", label: "ADMIN" },
-  { key: "USER", label: "USER" },
+  { key: "GESTOR", label: "GESTOR" },
+  { key: "COLABORADOR", label: "COLABORADOR" },
   { key: "INACTIVE", label: "Inativos" },
 ];
+
+const ROLE_FILTER_KEYS: FilterKey[] = ["ADMIN", "GESTOR", "COLABORADOR"];
 
 export default function UserAdminPage() {
   const { user: currentUser } = useAuth();
@@ -49,7 +53,7 @@ export default function UserAdminPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const users = useUsers({
-    role: filter === "ADMIN" || filter === "USER" ? filter : undefined,
+    role: ROLE_FILTER_KEYS.includes(filter) ? (filter as "ADMIN" | "GESTOR" | "COLABORADOR") : undefined,
     status: filter === "INACTIVE" ? "INACTIVE" : undefined,
     search: search.trim() || undefined,
   });
@@ -194,7 +198,7 @@ export default function UserAdminPage() {
                   </span>
                 </span>
                 <span
-                  className={`ui-sidebar-role ui-sidebar-role-${u.role === "ADMIN" ? "admin" : "user"}`}
+                  className={`ui-sidebar-role ui-sidebar-role-${ROLE_BADGE_CLASS[u.role]}`}
                   style={{ justifySelf: "start" }}
                 >
                   {u.role}

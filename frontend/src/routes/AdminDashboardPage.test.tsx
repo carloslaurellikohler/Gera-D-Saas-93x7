@@ -28,6 +28,7 @@ const STATS: DashboardStatsResponse = {
   board: [
     { pb_id: "ana", name: "Ana Silva", count: 3, avg_score: 8.4, level: "excelente", trend: "up" },
   ],
+  team_board: null,
 };
 
 beforeEach(() => {

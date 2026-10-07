@@ -42,7 +42,7 @@ class Content(Base):
     external_url: Mapped[str | None] = mapped_column(String(1000))
 
     # SET NULL (não CASCADE): remover o admin que subiu o material não deve apagar o
-    # material em si — mesmo racional de analyses.user_id.
+    # material em si — mesmo racional de analyses.owner_id.
     uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

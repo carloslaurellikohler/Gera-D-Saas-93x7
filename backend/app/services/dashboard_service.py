@@ -5,17 +5,20 @@ agregações ao DashboardRepository e normaliza o farol via core.farol."""
 from __future__ import annotations
 
 import statistics
+import uuid
 from datetime import date, timedelta
 
 from app.core.farol import get_farol_level
 from app.models.user import User, UserRole
 from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.methodology_repository import MethodologyRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.dashboard import (
     DashboardStatsResponse,
     FarolDistributionItem,
     Period,
     ProfessionalBoardRow,
+    TeamBoardRow,
     TrendPoint,
     VolumeByStatus,
 )
@@ -23,28 +26,44 @@ from app.schemas.dashboard import (
 _PERIOD_DAYS: dict[Period, int] = {"30d": 30, "90d": 90, "6m": 182}
 
 # Diferença mínima de nota entre a primeira e a segunda metade do período para
-# considerar a tendência de um PB como "up"/"down" em vez de "flat" — evita ruído de
-# pequenas oscilações entre duas ou três análises.
+# considerar a tendência de um grupo como "up"/"down" em vez de "flat" — evita ruído
+# de pequenas oscilações entre duas ou três análises.
 _TREND_EPSILON = 0.3
 
 
 class DashboardService:
-    def __init__(self, repo: DashboardRepository, methodology_repo: MethodologyRepository) -> None:
+    def __init__(
+        self,
+        repo: DashboardRepository,
+        methodology_repo: MethodologyRepository,
+        user_repo: UserRepository,
+    ) -> None:
         self.repo = repo
         self.methodology_repo = methodology_repo
+        self.user_repo = user_repo
 
     def get_stats(self, *, current_user: User, period: Period = "6m") -> DashboardStatsResponse:
         since = date.today() - timedelta(days=_PERIOD_DAYS[period])
-        is_admin = current_user.role == UserRole.ADMIN
-        user_id = None if is_admin else current_user.id
         label_color_map = self.methodology_repo.get_label_color_map()
+
+        board: list[ProfessionalBoardRow] | None = None
+        team_board: list[TeamBoardRow] | None = None
+
+        if current_user.role == UserRole.ADMIN:
+            owner_ids = None
+            board = self._build_pb_board(since, label_color_map)
+        elif current_user.role == UserRole.GESTOR:
+            owner_ids = [u.id for u in self.user_repo.list_subordinates(current_user.id)]
+            team_board = self._build_team_board(owner_ids, since, label_color_map)
+        else:  # COLABORADOR
+            owner_ids = [current_user.id]
 
         volume = [
             VolumeByStatus(status=status.value, count=count)
-            for status, count in self.repo.count_by_status(user_id=user_id, since=since)
+            for status, count in self.repo.count_by_status(owner_ids=owner_ids, since=since)
         ]
 
-        band_counts = self.repo.count_by_band_label(user_id=user_id, since=since)
+        band_counts = self.repo.count_by_band_label(owner_ids=owner_ids, since=since)
         total_completed = sum(count for _, count in band_counts)
         farol_distribution = [
             FarolDistributionItem(
@@ -58,10 +77,8 @@ class DashboardService:
 
         trend = [
             TrendPoint(period_start=period_start, count=count, avg_score=_round_or_none(avg_score))
-            for period_start, count, avg_score in self.repo.trend_by_week(user_id=user_id, since=since)
+            for period_start, count, avg_score in self.repo.trend_by_week(owner_ids=owner_ids, since=since)
         ]
-
-        board = self._build_board(since, label_color_map) if is_admin else None
 
         return DashboardStatsResponse(
             period=period,
@@ -69,39 +86,65 @@ class DashboardService:
             farol_distribution=farol_distribution,
             trend=trend,
             board=board,
+            team_board=team_board,
         )
 
-    def _build_board(self, since: date, label_color_map: dict[str, str]) -> list[ProfessionalBoardRow]:
+    def _build_pb_board(self, since: date, label_color_map: dict[str, str]) -> list[ProfessionalBoardRow]:
         rows = self.repo.completed_rows_by_participant(since=since)
-
-        groups: dict[str, dict] = {}
-        for pb_id, participant_name, completed_at, score, band_label in rows:
-            group = groups.setdefault(
-                pb_id, {"name": participant_name, "entries": [], "pb_id_source": pb_id}
+        groups = _group_entries(rows)
+        return [
+            ProfessionalBoardRow(
+                pb_id=group_id,
+                name=name,
+                count=len(entries),
+                avg_score=_round_or_none(_avg_score(entries)),
+                level=get_farol_level(entries[-1][2], label_color_map),
+                trend=_trend_from_entries(entries),
             )
-            group["name"] = participant_name
-            group["entries"].append((completed_at, score, band_label))
+            for group_id, name, entries in groups
+        ]
 
-        board: list[ProfessionalBoardRow] = []
-        for pb_id, group in groups.items():
-            entries = sorted(group["entries"], key=lambda e: e[0])
-            scores = [score for _, score, _ in entries if score is not None]
-            avg_score = statistics.mean(scores) if scores else None
-            latest_label = entries[-1][2]
-
-            board.append(
-                ProfessionalBoardRow(
-                    pb_id=pb_id,
-                    name=group["name"],
-                    count=len(entries),
-                    avg_score=_round_or_none(avg_score),
-                    level=get_farol_level(latest_label, label_color_map),
-                    trend=_trend_from_entries(entries),
-                )
+    def _build_team_board(
+        self, owner_ids: list[uuid.UUID], since: date, label_color_map: dict[str, str]
+    ) -> list[TeamBoardRow]:
+        if not owner_ids:
+            return []
+        rows = self.repo.completed_rows_by_owner(owner_ids=owner_ids, since=since)
+        groups = _group_entries(rows)
+        return [
+            TeamBoardRow(
+                user_id=str(group_id),
+                name=name,
+                count=len(entries),
+                avg_score=_round_or_none(_avg_score(entries)),
+                level=get_farol_level(entries[-1][2], label_color_map),
+                trend=_trend_from_entries(entries),
             )
+            for group_id, name, entries in groups
+        ]
 
-        board.sort(key=lambda row: (row.avg_score is None, row.avg_score))
-        return board
+
+def _group_entries(rows) -> list[tuple]:
+    """Agrupa linhas cruas (group_id, name, completed_at, score, band_label) por
+    group_id, ordenando cada grupo por completed_at — reaproveitado tanto pelo quadro
+    por PB (ADMIN) quanto pelo quadro por colaborador (GESTOR)."""
+    groups: dict = {}
+    for group_id, name, completed_at, score, band_label in rows:
+        group = groups.setdefault(group_id, {"name": name, "entries": []})
+        group["name"] = name
+        group["entries"].append((completed_at, score, band_label))
+
+    ordered = [
+        (group_id, group["name"], sorted(group["entries"], key=lambda e: e[0]))
+        for group_id, group in groups.items()
+    ]
+    ordered.sort(key=lambda item: (_avg_score(item[2]) is None, _avg_score(item[2])))
+    return ordered
+
+
+def _avg_score(entries: list[tuple]) -> float | None:
+    scores = [score for _, score, _ in entries if score is not None]
+    return statistics.mean(scores) if scores else None
 
 
 def _format_pct(count: int, total: int) -> str:

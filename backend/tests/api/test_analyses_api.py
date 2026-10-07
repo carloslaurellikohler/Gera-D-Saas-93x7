@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.methodology import Calibrator, FarolColor, Methodology, MethodologyStatus
+from app.models.user import UserRole
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.methodology_repository import MethodologyRepository
 
@@ -128,7 +129,7 @@ def test_report_json_includes_overall_farol_level(client_factory, db_session):
             objective="Onboarding",
             input_type="txt",
             interaction_id="interaction-1",
-            user_id=owner.id,
+            owner_id=owner.id,
             status=AnalysisStatus.COMPLETED,
             completed_at=datetime.now(timezone.utc),
             analysis_result={"overall_score": 8.5, "overall_band_label": "Excelente desempenho"},
@@ -184,7 +185,7 @@ def test_created_analysis_has_correct_owner(client, api_service):
     created = _create_analysis(client).json()
 
     analysis = api_service.repo.get(uuid.UUID(created["id"]))
-    assert analysis.user_id is not None
+    assert analysis.owner_id is not None
 
 
 def test_list_only_returns_own_for_regular_user(client_factory):
@@ -265,3 +266,87 @@ def test_delete_by_admin_allowed(client_factory, admin_client):
     response = admin_client.delete(f"/api/v1/analyses/{created['id']}")
 
     assert response.status_code == 204
+
+
+def test_gestor_creates_analysis_for_colaborador_da_equipe(client_factory, api_service):
+    import uuid as uuid_module
+
+    gestor_client, gestor = client_factory(role=UserRole.GESTOR)
+    _, colaborador = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+
+    response = _create_analysis(gestor_client, owner_id=str(colaborador.id))
+
+    assert response.status_code == 201
+    analysis = api_service.repo.get(uuid_module.UUID(response.json()["id"]))
+    assert analysis.owner_id == colaborador.id
+    assert analysis.created_by_id == gestor.id
+    assert analysis.cs_id == str(colaborador.id)
+    assert analysis.cs_name == colaborador.name
+
+
+def test_gestor_criar_analise_sem_owner_id_retorna_422(client_factory):
+    gestor_client, _ = client_factory(role=UserRole.GESTOR)
+
+    response = _create_analysis(gestor_client)
+
+    assert response.status_code == 422
+
+
+def test_gestor_nao_pode_atribuir_analise_fora_da_equipe(client_factory):
+    gestor_client, _ = client_factory(role=UserRole.GESTOR)
+    _, outsider = client_factory(role=UserRole.COLABORADOR)
+
+    response = _create_analysis(gestor_client, owner_id=str(outsider.id))
+
+    assert response.status_code == 404
+
+
+def test_colaborador_nao_ve_analise_de_colega_sob_mesmo_gestor(client_factory):
+    _, gestor = client_factory(role=UserRole.GESTOR)
+    colaborador_a, _ = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+    colaborador_b, _ = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+
+    created = _create_analysis(colaborador_a, participant_name="Ana").json()
+
+    response = colaborador_b.get(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 404
+
+
+def test_gestor_ve_analise_de_colaborador_da_equipe(client_factory):
+    gestor_client, gestor = client_factory(role=UserRole.GESTOR)
+    colaborador_client, colaborador = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+
+    created = _create_analysis(gestor_client, owner_id=str(colaborador.id), participant_name="Ana").json()
+
+    response = gestor_client.get(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == created["id"]
+
+
+def test_gestor_nao_ve_analise_fora_da_equipe(client_factory):
+    gestor_client, _ = client_factory(role=UserRole.GESTOR)
+    other_client, _ = client_factory(role=UserRole.COLABORADOR)
+
+    created = _create_analysis(other_client, participant_name="Ana").json()
+
+    response = gestor_client.get(f"/api/v1/analyses/{created['id']}")
+
+    assert response.status_code == 404
+
+
+def test_gestor_list_analyses_retorna_so_a_equipe(client_factory):
+    gestor_client, gestor = client_factory(role=UserRole.GESTOR)
+    colaborador_client, colaborador = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+    other_client, _ = client_factory(role=UserRole.COLABORADOR)
+
+    _create_analysis(gestor_client, owner_id=str(colaborador.id), participant_name="Ana")
+    _create_analysis(other_client, participant_name="Bruno")
+
+    response = gestor_client.get("/api/v1/analyses")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["participant_name"] == "Ana"

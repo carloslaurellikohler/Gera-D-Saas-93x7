@@ -7,7 +7,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +16,8 @@ from app.db.base import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
-    USER = "USER"
+    GESTOR = "GESTOR"
+    COLABORADOR = "COLABORADOR"
 
 
 class UserStatus(str, enum.Enum):
@@ -38,12 +39,20 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", native_enum=False, length=32),
         nullable=False,
-        default=UserRole.USER,
+        default=UserRole.COLABORADOR,
     )
     status: Mapped[UserStatus] = mapped_column(
         Enum(UserStatus, name="user_status", native_enum=False, length=32),
         nullable=False,
         default=UserStatus.ACTIVE,
+    )
+
+    # Gestor responsável — só relevante quando role == COLABORADOR (validado em
+    # UserService, não via CHECK de banco). Hierarquia de um nível só: sem
+    # relationship() ORM, igual ao resto do modelo — resolvido via query explícita em
+    # UserRepository.list_subordinates.
+    manager_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
 
     created_at: Mapped[datetime] = mapped_column(

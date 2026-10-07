@@ -38,7 +38,7 @@ def admin_user(db_session) -> User:
 @pytest.fixture()
 def regular_user(db_session) -> User:
     return UserRepository(db_session).create(
-        User(name="U", email="lpsu@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(name="U", email="lpsu@example.com", password_hash="h", role=UserRole.COLABORADOR, status=UserStatus.ACTIVE)
     )
 
 
@@ -148,7 +148,7 @@ def _completed_analysis(db_session, *, user_id, interaction_id: str, criterion_s
             objective="Onboarding",
             input_type="txt",
             interaction_id=interaction_id,
-            user_id=user_id,
+            owner_id=user_id,
             status=AnalysisStatus.COMPLETED,
             completed_at=datetime.now(timezone.utc),
             analysis_result=analysis_result,
@@ -285,7 +285,7 @@ def test_get_detail_marks_completed_items_for_current_user_only(
     service, admin_user, regular_user, db_session
 ):
     other_user = UserRepository(db_session).create(
-        User(name="Outro", email="lpso@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(name="Outro", email="lpso@example.com", password_hash="h", role=UserRole.COLABORADOR, status=UserStatus.ACTIVE)
     )
     path = _create_path_with_items(service, admin_user, db_session, item_count=1)
     service.enroll(learning_path_id=path.id, user=regular_user)

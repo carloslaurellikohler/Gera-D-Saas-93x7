@@ -48,6 +48,9 @@ export function createAnalysis(payload: CreateAnalysisPayload) {
   if (payload.interaction_date) {
     formData.append("interaction_date", payload.interaction_date);
   }
+  if (payload.owner_id) {
+    formData.append("owner_id", payload.owner_id);
+  }
   formData.append("file", payload.file);
 
   return apiPostForm<AnalysisResponse>("/analyses", formData);

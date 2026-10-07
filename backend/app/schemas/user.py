@@ -27,7 +27,8 @@ class UserCreateIn(BaseModel):
     name: str
     email: str
     password: str
-    role: UserRole = UserRole.USER
+    role: UserRole = UserRole.COLABORADOR
+    manager_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -51,6 +52,7 @@ class UserUpdateIn(BaseModel):
     name: str
     email: str
     role: UserRole
+    manager_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -82,5 +84,6 @@ class UserResponse(BaseModel):
     email: str
     role: UserRole
     status: UserStatus
+    manager_id: uuid.UUID | None
     created_at: datetime
     last_login_at: datetime | None

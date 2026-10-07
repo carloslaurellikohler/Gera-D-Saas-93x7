@@ -4,9 +4,11 @@ import { useAnalyses } from "../hooks/useAnalyses";
 import { useDashboardStats } from "../hooks/useDashboardStats";
 import { formatDate } from "../lib/format";
 import StatusBadge from "../components/ui/StatusBadge";
+import BoardTable from "../components/ui/BoardTable";
 import EmptyState from "../components/ui/EmptyState";
 import FarolBadge, { toFarolLevel } from "../components/ui/FarolBadge";
 import Icon from "../components/ui/Icon";
+import { useAuth } from "../context/AuthContext";
 import type { AnalysisListItem, AnalysisStatus } from "../types/analysis";
 
 type FilterKey = "todos" | "andamento" | "concluidos" | "falha";
@@ -33,6 +35,8 @@ function initialsOf(name: string): string {
 }
 
 export default function DashboardPage() {
+  const { hasRole } = useAuth();
+  const isGestor = hasRole("GESTOR");
   const { data, isLoading, isError } = useAnalyses();
   const { data: stats } = useDashboardStats();
   const [filter, setFilter] = useState<FilterKey>("todos");
@@ -90,12 +94,12 @@ export default function DashboardPage() {
       {stats && statsTotalVolume > 0 && (
         <div className="kpi-grid" style={{ margin: "20px 0" }}>
           <div className="kpi-card">
-            <span className="kpi-label">Minhas análises</span>
+            <span className="kpi-label">{isGestor ? "Análises da equipe" : "Minhas análises"}</span>
             <span className="kpi-value">{statsTotalVolume}</span>
             <span className="kpi-description">Últimos 6 meses</span>
           </div>
           <div className="kpi-card">
-            <span className="kpi-label">Minha nota média</span>
+            <span className="kpi-label">{isGestor ? "Nota média da equipe" : "Minha nota média"}</span>
             <span className="kpi-value">{statsAvgScore !== null ? statsAvgScore.toFixed(1) : "—"}</span>
             <span className="kpi-description">Escala de 0 a 10</span>
           </div>
@@ -110,6 +114,17 @@ export default function DashboardPage() {
             </span>
             <span className="kpi-description">{statsPredominantFarol?.pct ?? ""}</span>
           </div>
+        </div>
+      )}
+
+      {isGestor && stats?.team_board && (
+        <div style={{ margin: "20px 0" }}>
+          <BoardTable
+            title="Quadro da equipe"
+            nameColumnLabel="Colaborador"
+            rows={stats.team_board.map((row) => ({ id: row.user_id, ...row }))}
+            emptyMessage="Nenhum colaborador da equipe com análises concluídas no período."
+          />
         </div>
       )}
 

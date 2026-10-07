@@ -61,7 +61,13 @@ class AnalysisService:
         temp_file_path: Path,
         file_size_bytes: int,
         file_header: bytes,
+        owner: User | None = None,
     ) -> Analysis:
+        # owner é quem avalia/conta nas métricas (o colaborador); current_user é quem
+        # de fato fez o upload. Para um COLABORADOR subindo a própria análise, os dois
+        # são a mesma pessoa. Para um GESTOR subindo em nome de alguém da equipe,
+        # owner é validado contra a equipe na rota antes de chegar aqui.
+        target_owner = owner or current_user
         input_type = validate_upload_streamed(
             file_name=file_name,
             size_bytes=file_size_bytes,
@@ -81,9 +87,10 @@ class AnalysisService:
             input_type=input_type,
             file_name=safe_name,
             status=AnalysisStatus.CREATED,
-            user_id=current_user.id,
-            cs_id=str(current_user.id),
-            cs_name=current_user.name,
+            owner_id=target_owner.id,
+            created_by_id=current_user.id,
+            cs_id=str(target_owner.id),
+            cs_name=target_owner.name,
             pb_id=slugify(participant_name),
             interaction_id=str(analysis_id),
         )

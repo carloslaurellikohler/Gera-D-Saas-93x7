@@ -14,13 +14,13 @@ from app.services.metrics_service import _CRITERION_ORDER, MetricsService
 
 @pytest.fixture()
 def service(db_session) -> MetricsService:
-    return MetricsService(repo=MetricsRepository(db_session))
+    return MetricsService(repo=MetricsRepository(db_session), user_repo=UserRepository(db_session))
 
 
 @pytest.fixture()
 def regular_user(db_session) -> User:
     return UserRepository(db_session).create(
-        User(name="U", email="mu@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(name="U", email="mu@example.com", password_hash="h", role=UserRole.COLABORADOR, status=UserStatus.ACTIVE)
     )
 
 
@@ -34,7 +34,7 @@ def admin_user(db_session) -> User:
 def _completed(
     db_session,
     *,
-    user_id,
+    owner_id,
     interaction_id: str,
     completed_at: datetime,
     overall_score: float = 8.0,
@@ -59,7 +59,7 @@ def _completed(
             objective="Onboarding",
             input_type="txt",
             interaction_id=interaction_id,
-            user_id=user_id,
+            owner_id=owner_id,
             status=AnalysisStatus.COMPLETED,
             completed_at=completed_at,
             analysis_result=analysis_result,
@@ -71,14 +71,14 @@ def test_radar_averages_current_period_scores_per_criterion(db_session, service,
     now = datetime.now(timezone.utc)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="s1",
         completed_at=now,
         criterion_scores={"posicionamento": 6.0, **{k: 8.0 for k in _CRITERION_ORDER if k != "posicionamento"}},
     )
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="s2",
         completed_at=now,
         criterion_scores={"posicionamento": 8.0, **{k: 8.0 for k in _CRITERION_ORDER if k != "posicionamento"}},
@@ -98,14 +98,14 @@ def test_radar_includes_previous_period_comparison(db_session, service, regular_
     previous = now - timedelta(days=45)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="s3",
         completed_at=now,
         criterion_scores={k: 9.0 for k in _CRITERION_ORDER},
     )
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="s4",
         completed_at=previous,
         criterion_scores={k: 6.0 for k in _CRITERION_ORDER},
@@ -130,7 +130,7 @@ def test_trend_aggregates_weekly_buckets_for_overall_and_both_pillars(db_session
     now = datetime.now(timezone.utc)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="s5",
         completed_at=now,
         overall_score=8.0,
@@ -139,7 +139,7 @@ def test_trend_aggregates_weekly_buckets_for_overall_and_both_pillars(db_session
     )
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="s6",
         completed_at=now,
         overall_score=6.0,
@@ -159,8 +159,8 @@ def test_trend_aggregates_weekly_buckets_for_overall_and_both_pillars(db_session
 
 def test_admin_sees_all_users_regular_user_sees_only_own(db_session, service, regular_user, admin_user):
     now = datetime.now(timezone.utc)
-    _completed(db_session, user_id=regular_user.id, interaction_id="s7", completed_at=now)
-    _completed(db_session, user_id=admin_user.id, interaction_id="s8", completed_at=now)
+    _completed(db_session, owner_id=regular_user.id, interaction_id="s7", completed_at=now)
+    _completed(db_session, owner_id=admin_user.id, interaction_id="s8", completed_at=now)
 
     user_result = service.get_evolution(current_user=regular_user, period="30d")
     admin_result = service.get_evolution(current_user=admin_user, period="30d")
@@ -171,9 +171,35 @@ def test_admin_sees_all_users_regular_user_sees_only_own(db_session, service, re
 
 def test_period_limits_query_window(db_session, service, regular_user):
     old = datetime.now(timezone.utc) - timedelta(days=200)
-    _completed(db_session, user_id=regular_user.id, interaction_id="s9", completed_at=old)
+    _completed(db_session, owner_id=regular_user.id, interaction_id="s9", completed_at=old)
 
     result = service.get_evolution(current_user=regular_user, period="30d")
 
     assert result.trend == []
     assert all(p.score is None for p in result.radar)
+
+
+def test_gestor_sees_aggregated_team_only(db_session, service):
+    user_repo = UserRepository(db_session)
+    gestor = user_repo.create(
+        User(name="Gestor", email="mgestor@example.com", password_hash="h", role=UserRole.GESTOR)
+    )
+    colaborador = user_repo.create(
+        User(
+            name="Colaborador",
+            email="mcolab@example.com",
+            password_hash="h",
+            role=UserRole.COLABORADOR,
+            manager_id=gestor.id,
+        )
+    )
+    outsider = user_repo.create(
+        User(name="Fora", email="mfora@example.com", password_hash="h", role=UserRole.COLABORADOR)
+    )
+    now = datetime.now(timezone.utc)
+    _completed(db_session, owner_id=colaborador.id, interaction_id="s10", completed_at=now)
+    _completed(db_session, owner_id=outsider.id, interaction_id="s11", completed_at=now)
+
+    result = service.get_evolution(current_user=gestor, period="30d")
+
+    assert result.trend[0].count == 1

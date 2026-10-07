@@ -22,7 +22,7 @@ def test_create_and_get(db_session):
 
     assert fetched is not None
     assert fetched.email == "ana@example.com"
-    assert fetched.role == UserRole.USER
+    assert fetched.role == UserRole.COLABORADOR
     assert fetched.status == UserStatus.ACTIVE
     assert fetched.created_at is not None
 
@@ -51,7 +51,7 @@ def test_update(db_session):
 def test_list_filters_by_role(db_session):
     repo = UserRepository(db_session)
     repo.create(_new_user(email="admin@example.com", role=UserRole.ADMIN))
-    repo.create(_new_user(email="user@example.com", role=UserRole.USER))
+    repo.create(_new_user(email="user@example.com", role=UserRole.COLABORADOR))
 
     admins = repo.list(role=UserRole.ADMIN)
 
@@ -95,5 +95,21 @@ def test_list_orders_by_name(db_session):
     repo.create(_new_user(name="Ana", email="ana2@example.com"))
 
     result = repo.list()
+
+    assert [u.name for u in result] == ["Ana", "Zeca"]
+
+
+def test_list_subordinates_returns_only_direct_reports(db_session):
+    repo = UserRepository(db_session)
+    gestor = repo.create(_new_user(name="Gestor", email="gestor@example.com", role=UserRole.GESTOR))
+    repo.create(
+        _new_user(name="Zeca", email="zeca2@example.com", role=UserRole.COLABORADOR, manager_id=gestor.id)
+    )
+    repo.create(
+        _new_user(name="Ana", email="ana3@example.com", role=UserRole.COLABORADOR, manager_id=gestor.id)
+    )
+    repo.create(_new_user(name="Sem gestor", email="solta@example.com"))
+
+    result = repo.list_subordinates(gestor.id)
 
     assert [u.name for u in result] == ["Ana", "Zeca"]

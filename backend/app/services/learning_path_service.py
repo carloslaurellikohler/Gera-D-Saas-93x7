@@ -185,7 +185,7 @@ class LearningPathService:
 
     def get_recommended(self, *, current_user: User, limit: int = 3) -> list[LearningPathSummary]:
         since = date.today() - timedelta(days=_RECOMMENDATION_WINDOW_DAYS)
-        rows = self.metrics_repo.completed_rows(user_id=current_user.id, since=since)
+        rows = self.metrics_repo.completed_rows(owner_ids=[current_user.id], since=since)
         if not rows:
             return []
 

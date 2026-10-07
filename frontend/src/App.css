@@ -219,7 +219,12 @@ h3 {
   color: var(--gerad-navy);
 }
 
-.ui-sidebar-role-user {
+.ui-sidebar-role-gestor {
+  background: var(--gray-200);
+  color: var(--gerad-navy);
+}
+
+.ui-sidebar-role-colaborador {
   background: var(--gray-100);
   color: var(--gerad-navy);
 }

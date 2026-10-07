@@ -24,7 +24,7 @@ def _create_user(db_session, **overrides) -> User:
         name="Ana Souza",
         email="ana@example.com",
         password_hash=hash_password("correct-password"),
-        role=UserRole.USER,
+        role=UserRole.COLABORADOR,
         status=UserStatus.ACTIVE,
     )
     defaults.update(overrides)

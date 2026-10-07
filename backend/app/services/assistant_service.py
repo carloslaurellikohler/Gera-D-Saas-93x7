@@ -134,7 +134,7 @@ class AssistantService:
         """Resumo textual curto a partir de scores_by_criterion/overall_score/farol já
         extraídos — nunca o texto bruto (transcription/analysis_result) da engine."""
         since = date.today() - timedelta(days=_PERSONAL_CONTEXT_WINDOW_DAYS)
-        rows = self.metrics_repo.completed_rows(user_id=user.id, since=since)
+        rows = self.metrics_repo.completed_rows(owner_ids=[user.id], since=since)
         if not rows:
             return "O usuário ainda não tem análises concluídas nos últimos 90 dias."
 

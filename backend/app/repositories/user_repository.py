@@ -26,6 +26,10 @@ class UserRepository:
         stmt = select(User).where(User.email == email)
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def list_subordinates(self, manager_id: uuid.UUID) -> list[User]:
+        stmt = select(User).where(User.manager_id == manager_id).order_by(User.name.asc())
+        return list(self.db.execute(stmt).scalars().all())
+
     def list(
         self,
         *,

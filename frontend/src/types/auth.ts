@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "USER";
+export type UserRole = "ADMIN" | "GESTOR" | "COLABORADOR";
 export type UserStatus = "ACTIVE" | "INACTIVE";
 
 export interface User {
@@ -7,6 +7,7 @@ export interface User {
   email: string;
   role: UserRole;
   status: UserStatus;
+  manager_id: string | null;
   created_at: string;
   last_login_at: string | null;
 }

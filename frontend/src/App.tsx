@@ -13,7 +13,7 @@ import AdminDashboardPage from "./routes/AdminDashboardPage";
 import CalibrationPage from "./routes/CalibrationPage";
 import UserAdminPage from "./routes/UserAdminPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import AdminRoute from "./components/auth/AdminRoute";
+import RequireRole from "./components/auth/RequireRole";
 import Sidebar from "./components/ui/Sidebar";
 import "./App.css";
 
@@ -99,9 +99,9 @@ function App() {
           path="/admin"
           element={
             <AuthenticatedShell>
-              <AdminRoute>
+              <RequireRole allow={["ADMIN"]}>
                 <AdminDashboardPage />
-              </AdminRoute>
+              </RequireRole>
             </AuthenticatedShell>
           }
         />
@@ -109,9 +109,9 @@ function App() {
           path="/calibracao"
           element={
             <AuthenticatedShell>
-              <AdminRoute>
+              <RequireRole allow={["ADMIN"]}>
                 <CalibrationPage />
-              </AdminRoute>
+              </RequireRole>
             </AuthenticatedShell>
           }
         />
@@ -119,9 +119,9 @@ function App() {
           path="/usuarios"
           element={
             <AuthenticatedShell>
-              <AdminRoute>
+              <RequireRole allow={["ADMIN"]}>
                 <UserAdminPage />
-              </AdminRoute>
+              </RequireRole>
             </AuthenticatedShell>
           }
         />

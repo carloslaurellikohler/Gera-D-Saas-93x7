@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import BoardTable from "../components/ui/BoardTable";
 import FarolBadge, { toFarolLevel } from "../components/ui/FarolBadge";
 import Icon from "../components/ui/Icon";
 import { useDashboardStats } from "../hooks/useDashboardStats";
@@ -11,9 +12,6 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   "90d": "Últimos 90 dias",
   "6m": "Últimos 6 meses",
 };
-
-const TREND_ICON = { up: "trending_up", down: "trending_down", flat: "trending_flat" };
-const TREND_COLOR = { up: "#0B6B3A", down: "#A10019", flat: "var(--content-secondary)" };
 
 export default function AdminDashboardPage() {
   const [period, setPeriod] = useState<DashboardPeriod>("6m");
@@ -140,51 +138,12 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="data-table">
-            <div style={{ padding: "18px 24px" }}>
-              <h3>Quadro individual</h3>
-            </div>
-            <div
-              className="data-table-row data-table-head"
-              style={{ gridTemplateColumns: "minmax(0,1.4fr) 100px 100px 220px 110px" }}
-            >
-              <span>Participante</span>
-              <span>Análises</span>
-              <span>Nota média</span>
-              <span>Farol</span>
-              <span>Tendência</span>
-            </div>
-            {(data.board ?? []).map((b) => (
-              <div
-                key={b.pb_id}
-                className="data-table-row"
-                style={{ gridTemplateColumns: "minmax(0,1.4fr) 100px 100px 220px 110px" }}
-              >
-                <b>{b.name}</b>
-                <span>{b.count}</span>
-                <b>{b.avg_score ?? "—"}</b>
-                {b.level ? <FarolBadge level={toFarolLevel(b.level)} /> : <span>—</span>}
-                {b.trend && (
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      fontWeight: 600,
-                      color: TREND_COLOR[b.trend],
-                    }}
-                  >
-                    <Icon name={TREND_ICON[b.trend]} size={18} />
-                  </span>
-                )}
-              </div>
-            ))}
-            {data.board?.length === 0 && (
-              <div className="data-table-row">
-                <span className="page-subtitle">Nenhuma análise concluída no período.</span>
-              </div>
-            )}
-          </div>
+          <BoardTable
+            title="Quadro individual"
+            nameColumnLabel="Participante"
+            rows={(data.board ?? []).map((b) => ({ id: b.pb_id, ...b }))}
+            emptyMessage="Nenhuma análise concluída no período."
+          />
         </>
       )}
     </div>

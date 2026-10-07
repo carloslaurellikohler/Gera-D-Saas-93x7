@@ -39,14 +39,22 @@ def _seed_calibrators(db_session) -> None:
 def service(db_session) -> DashboardService:
     _seed_calibrators(db_session)
     return DashboardService(
-        repo=DashboardRepository(db_session), methodology_repo=MethodologyRepository(db_session)
+        repo=DashboardRepository(db_session),
+        methodology_repo=MethodologyRepository(db_session),
+        user_repo=UserRepository(db_session),
     )
 
 
 @pytest.fixture()
 def regular_user(db_session) -> User:
     return UserRepository(db_session).create(
-        User(name="U", email="u@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(
+            name="U",
+            email="u@example.com",
+            password_hash="h",
+            role=UserRole.COLABORADOR,
+            status=UserStatus.ACTIVE,
+        )
     )
 
 
@@ -57,14 +65,14 @@ def admin_user(db_session) -> User:
     )
 
 
-def _completed(db_session, *, user_id, interaction_id, participant_name, overall_score, band_label, completed_at):
+def _completed(db_session, *, owner_id, interaction_id, participant_name, overall_score, band_label, completed_at):
     return AnalysisRepository(db_session).create(
         Analysis(
             participant_name=participant_name,
             objective="Onboarding",
             input_type="txt",
             interaction_id=interaction_id,
-            user_id=user_id,
+            owner_id=owner_id,
             pb_id=participant_name.lower().replace(" ", "-"),
             status=AnalysisStatus.COMPLETED,
             completed_at=completed_at,
@@ -77,7 +85,7 @@ def test_normalizes_band_label_to_known_level(db_session, service, regular_user)
     now = datetime.now(timezone.utc)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="i1",
         participant_name="Ana",
         overall_score=9.0,
@@ -94,7 +102,7 @@ def test_unknown_band_label_falls_back_gracefully(db_session, service, regular_u
     now = datetime.now(timezone.utc)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="i2",
         participant_name="Ana",
         overall_score=9.0,
@@ -113,7 +121,7 @@ def test_admin_scope_includes_board_regular_user_scope_does_not(
     now = datetime.now(timezone.utc)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="i3",
         participant_name="Ana",
         overall_score=8.0,
@@ -134,7 +142,7 @@ def test_regular_user_only_sees_own_farol_distribution(db_session, service, regu
     now = datetime.now(timezone.utc)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="i4",
         participant_name="Ana",
         overall_score=8.0,
@@ -143,7 +151,7 @@ def test_regular_user_only_sees_own_farol_distribution(db_session, service, regu
     )
     _completed(
         db_session,
-        user_id=admin_user.id,
+        owner_id=admin_user.id,
         interaction_id="i5",
         participant_name="Bruno",
         overall_score=5.0,
@@ -161,7 +169,7 @@ def test_period_limits_query_window(db_session, service, regular_user):
     old = datetime.now(timezone.utc) - timedelta(days=200)
     _completed(
         db_session,
-        user_id=regular_user.id,
+        owner_id=regular_user.id,
         interaction_id="i6",
         participant_name="Ana",
         overall_score=8.0,
@@ -172,3 +180,51 @@ def test_period_limits_query_window(db_session, service, regular_user):
     stats = service.get_stats(current_user=regular_user, period="30d")
 
     assert stats.farol_distribution == []
+
+
+def test_gestor_scope_includes_team_board_with_colaborador_scores(db_session, service):
+    user_repo = UserRepository(db_session)
+    gestor = user_repo.create(
+        User(name="Gestor", email="gestor@example.com", password_hash="h", role=UserRole.GESTOR)
+    )
+    colaborador = user_repo.create(
+        User(
+            name="Colaborador",
+            email="colab@example.com",
+            password_hash="h",
+            role=UserRole.COLABORADOR,
+            manager_id=gestor.id,
+        )
+    )
+    outsider = user_repo.create(
+        User(name="Fora da equipe", email="fora@example.com", password_hash="h", role=UserRole.COLABORADOR)
+    )
+    now = datetime.now(timezone.utc)
+    _completed(
+        db_session,
+        owner_id=colaborador.id,
+        interaction_id="i7",
+        participant_name="Ana",
+        overall_score=8.0,
+        band_label="Excelente desempenho",
+        completed_at=now,
+    )
+    _completed(
+        db_session,
+        owner_id=outsider.id,
+        interaction_id="i8",
+        participant_name="Bruno",
+        overall_score=5.0,
+        band_label="Desenvolvimento crítico",
+        completed_at=now,
+    )
+
+    stats = service.get_stats(current_user=gestor, period="30d")
+
+    assert stats.board is None
+    assert stats.team_board is not None
+    assert len(stats.team_board) == 1
+    assert stats.team_board[0].user_id == str(colaborador.id)
+    assert stats.team_board[0].name == "Colaborador"
+    assert len(stats.farol_distribution) == 1
+    assert stats.farol_distribution[0].label == "Excelente desempenho"

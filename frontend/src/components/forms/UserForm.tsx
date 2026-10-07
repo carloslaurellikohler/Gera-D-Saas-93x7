@@ -2,16 +2,19 @@ import { useState } from "react";
 import { ApiError } from "../../api/client";
 import { useCreateUser } from "../../hooks/useCreateUser";
 import { useUpdateUser } from "../../hooks/useUpdateUser";
+import { useUsers } from "../../hooks/useUsers";
 import type { User, UserRole } from "../../types/auth";
 import ErrorBanner from "../ui/ErrorBanner";
 
 export default function UserForm({ onDone, editing }: { onDone: () => void; editing?: User }) {
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
+  const gestores = useUsers({ role: "GESTOR", status: "ACTIVE" });
 
   const [name, setName] = useState(editing?.name ?? "");
   const [email, setEmail] = useState(editing?.email ?? "");
-  const [role, setRole] = useState<UserRole>(editing?.role ?? "USER");
+  const [role, setRole] = useState<UserRole>(editing?.role ?? "COLABORADOR");
+  const [managerId, setManagerId] = useState<string>(editing?.manager_id ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -31,11 +34,12 @@ export default function UserForm({ onDone, editing }: { onDone: () => void; edit
       setError("A senha deve ter ao menos 8 caracteres.");
       return;
     }
+    const manager_id = role === "COLABORADOR" && managerId ? managerId : null;
     try {
       if (editing) {
-        await updateUser.mutateAsync({ id: editing.id, payload: { name, email, role } });
+        await updateUser.mutateAsync({ id: editing.id, payload: { name, email, role, manager_id } });
       } else {
-        await createUser.mutateAsync({ name, email, password, role });
+        await createUser.mutateAsync({ name, email, password, role, manager_id });
       }
       onDone();
     } catch (err) {
@@ -59,12 +63,35 @@ export default function UserForm({ onDone, editing }: { onDone: () => void; edit
         </div>
         <div className="form-field">
           <label htmlFor="user-role">Papel</label>
-          <select id="user-role" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-            <option value="USER">USER</option>
+          <select
+            id="user-role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as UserRole)}
+          >
+            <option value="COLABORADOR">COLABORADOR</option>
+            <option value="GESTOR">GESTOR</option>
             <option value="ADMIN">ADMIN</option>
           </select>
         </div>
       </div>
+
+      {role === "COLABORADOR" && (
+        <div className="form-field">
+          <label htmlFor="user-manager">Reporta para</label>
+          <select
+            id="user-manager"
+            value={managerId}
+            onChange={(e) => setManagerId(e.target.value)}
+          >
+            <option value="">Sem gestor</option>
+            {(gestores.data ?? []).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {!editing && (
         <div className="form-field">

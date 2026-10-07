@@ -119,6 +119,7 @@ export interface CreateAnalysisPayload {
   objective_complement?: string;
   duration_minutes?: number;
   interaction_date?: string;
+  owner_id?: string;
   file: File;
 }
 

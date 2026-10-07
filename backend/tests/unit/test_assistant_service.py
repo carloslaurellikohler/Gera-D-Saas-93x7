@@ -21,14 +21,14 @@ from app.services.assistant_service import AssistantService, DailyMessageLimitEr
 @pytest.fixture()
 def regular_user(db_session) -> User:
     return UserRepository(db_session).create(
-        User(name="U1", email="asu1@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(name="U1", email="asu1@example.com", password_hash="h", role=UserRole.COLABORADOR, status=UserStatus.ACTIVE)
     )
 
 
 @pytest.fixture()
 def other_user(db_session) -> User:
     return UserRepository(db_session).create(
-        User(name="U2", email="asu2@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(name="U2", email="asu2@example.com", password_hash="h", role=UserRole.COLABORADOR, status=UserStatus.ACTIVE)
     )
 
 
@@ -127,7 +127,7 @@ def test_personal_context_never_includes_raw_transcript(service, regular_user, d
             objective="Onboarding",
             input_type="txt",
             interaction_id="ctx-1",
-            user_id=regular_user.id,
+            owner_id=regular_user.id,
             status=AnalysisStatus.COMPLETED,
             completed_at=datetime.now(timezone.utc),
             transcription={"turns": ["texto bruto da conversa que nunca deve ser lido pelo assistente"]},

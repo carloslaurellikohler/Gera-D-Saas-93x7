@@ -1,13 +1,14 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as authApi from "../api/auth";
-import type { User } from "../types/auth";
+import type { User, UserRole } from "../types/auth";
 
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
+  hasRole: (...roles: UserRole[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: meQuery.isLoading,
     login: (email, password) => loginMutation.mutateAsync({ email, password }),
     logout: () => logoutMutation.mutateAsync(),
+    hasRole: (...roles) => !!meQuery.data && roles.includes(meQuery.data.role),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

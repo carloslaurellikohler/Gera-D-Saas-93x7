@@ -32,6 +32,7 @@ const ADMIN: User = {
   email: "admin@example.com",
   role: "ADMIN",
   status: "ACTIVE",
+  manager_id: null,
   created_at: "2026-01-01T00:00:00Z",
   last_login_at: "2026-01-02T00:00:00Z",
 };
@@ -40,8 +41,9 @@ const OTHER_USER: User = {
   id: "user-1",
   name: "Ana Souza",
   email: "ana@example.com",
-  role: "USER",
+  role: "COLABORADOR",
   status: "ACTIVE",
+  manager_id: null,
   created_at: "2026-01-01T00:00:00Z",
   last_login_at: null,
 };
@@ -87,7 +89,8 @@ describe("UserAdminPage", () => {
       name: "Ana Souza",
       email: "ana@example.com",
       password: "correct-password",
-      role: "USER",
+      role: "COLABORADOR",
+      manager_id: null,
     });
   });
 
@@ -147,7 +150,7 @@ describe("UserAdminPage", () => {
 
     expect(updateSpy).toHaveBeenCalledWith(
       "user-1",
-      expect.objectContaining({ name: "Ana Souza Lima", email: "ana@example.com", role: "USER" }),
+      expect.objectContaining({ name: "Ana Souza Lima", email: "ana@example.com", role: "COLABORADOR" }),
     );
   });
 
@@ -245,5 +248,58 @@ describe("UserAdminPage", () => {
     expect(listSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ role: "ADMIN" }),
     );
+  });
+
+  it("filters the list by GESTOR role when the GESTOR pill is clicked", async () => {
+    const listSpy = vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByText("Admin Teste");
+
+    await user.click(screen.getByRole("button", { name: "GESTOR" }));
+
+    expect(listSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ role: "GESTOR" }),
+    );
+  });
+
+  it("creates a COLABORADOR with the selected manager", async () => {
+    const GESTOR: User = { ...ADMIN, id: "gestor-1", name: "Gestora Teste", role: "GESTOR" };
+    const user = userEvent.setup();
+    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, GESTOR]);
+    const createSpy = vi.spyOn(usersApi, "createUser").mockResolvedValue(OTHER_USER);
+
+    renderPage();
+    await screen.findByText("Admin Teste");
+
+    await user.click(screen.getByRole("button", { name: /Novo usuário/ }));
+    await user.type(screen.getByLabelText("Nome"), "Ana Souza");
+    await user.type(screen.getByLabelText("E-mail"), "ana@example.com");
+    await user.type(screen.getByLabelText("Senha inicial"), "correct-password");
+    await user.selectOptions(await screen.findByLabelText("Reporta para"), "gestor-1");
+    await user.click(screen.getByRole("button", { name: "Criar usuário" }));
+
+    expect(createSpy.mock.calls[0]?.[0]).toEqual({
+      name: "Ana Souza",
+      email: "ana@example.com",
+      password: "correct-password",
+      role: "COLABORADOR",
+      manager_id: "gestor-1",
+    });
+  });
+
+  it("hides the manager field when the role is not COLABORADOR", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+
+    renderPage();
+    await screen.findByText("Admin Teste");
+
+    await user.click(screen.getByRole("button", { name: /Novo usuário/ }));
+    expect(screen.getByLabelText("Reporta para")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Papel"), "ADMIN");
+    expect(screen.queryByLabelText("Reporta para")).not.toBeInTheDocument();
   });
 });

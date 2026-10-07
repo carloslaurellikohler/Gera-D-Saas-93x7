@@ -30,7 +30,7 @@ def _seed_completed_with_weak_criterion(db_session, *, user_id, criterion_key: s
             objective="Onboarding",
             input_type="txt",
             interaction_id=f"lp-{uuid.uuid4()}",
-            user_id=user_id,
+            owner_id=user_id,
             status=AnalysisStatus.COMPLETED,
             completed_at=datetime.now(timezone.utc),
             analysis_result=analysis_result,

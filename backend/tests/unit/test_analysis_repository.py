@@ -74,8 +74,8 @@ def test_create_with_null_user_id_allowed(db_session):
     repo = AnalysisRepository(db_session)
     created = repo.create(_new_analysis(interaction_id="interaction-6"))
 
-    assert created.user_id is None
-    assert repo.get(created.id).user_id is None
+    assert created.owner_id is None
+    assert repo.get(created.id).owner_id is None
 
 
 def test_list_filters_by_user_id(db_session):
@@ -88,7 +88,7 @@ def test_list_filters_by_user_id(db_session):
             name="Usuária A",
             email="a@example.com",
             password_hash="hash",
-            role=UserRole.USER,
+            role=UserRole.COLABORADOR,
             status=UserStatus.ACTIVE,
         )
     )
@@ -97,19 +97,19 @@ def test_list_filters_by_user_id(db_session):
             name="Usuária B",
             email="b@example.com",
             password_hash="hash",
-            role=UserRole.USER,
+            role=UserRole.COLABORADOR,
             status=UserStatus.ACTIVE,
         )
     )
 
     repo = AnalysisRepository(db_session)
     owned_by_a = repo.create(
-        _new_analysis(interaction_id="interaction-7", user_id=user_a.id)
+        _new_analysis(interaction_id="interaction-7", owner_id=user_a.id)
     )
-    repo.create(_new_analysis(interaction_id="interaction-8", user_id=user_b.id))
+    repo.create(_new_analysis(interaction_id="interaction-8", owner_id=user_b.id))
     repo.create(_new_analysis(interaction_id="interaction-9"))
 
-    result = repo.list(user_id=user_a.id)
+    result = repo.list(owner_ids=[user_a.id])
 
     assert [x.id for x in result] == [owned_by_a.id]
 
@@ -123,14 +123,14 @@ def test_list_without_user_id_returns_all(db_session):
             name="Usuária C",
             email="c@example.com",
             password_hash="hash",
-            role=UserRole.USER,
+            role=UserRole.COLABORADOR,
             status=UserStatus.ACTIVE,
         )
     )
 
     repo = AnalysisRepository(db_session)
     a = repo.create(_new_analysis(interaction_id="interaction-10"))
-    b = repo.create(_new_analysis(interaction_id="interaction-11", user_id=user.id))
+    b = repo.create(_new_analysis(interaction_id="interaction-11", owner_id=user.id))
 
     result = repo.list()
 

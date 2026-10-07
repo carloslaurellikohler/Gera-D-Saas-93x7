@@ -109,7 +109,7 @@ def client_factory(_overrides, db_session):
     login e devolve (client, user). Usada quando um teste precisa de mais de uma
     identidade (ex.: dono vs. não-dono, usuário comum vs. ADMIN)."""
 
-    def _make(role: UserRole = UserRole.USER, **user_overrides) -> tuple[TestClient, User]:
+    def _make(role: UserRole = UserRole.COLABORADOR, **user_overrides) -> tuple[TestClient, User]:
         defaults = dict(
             name="Usuária Teste",
             email=f"user-{uuid.uuid4()}@example.com",
@@ -140,4 +140,10 @@ def client(client_factory) -> TestClient:
 @pytest.fixture()
 def admin_client(client_factory) -> TestClient:
     test_client, _ = client_factory(role=UserRole.ADMIN)
+    return test_client
+
+
+@pytest.fixture()
+def gestor_client(client_factory) -> TestClient:
+    test_client, _ = client_factory(role=UserRole.GESTOR)
     return test_client

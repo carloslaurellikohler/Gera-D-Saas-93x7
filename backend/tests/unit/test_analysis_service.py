@@ -57,7 +57,7 @@ def current_user(db_session) -> User:
             name="Consultora Teste",
             email="consultora@example.com",
             password_hash="hash",
-            role=UserRole.USER,
+            role=UserRole.COLABORADOR,
             status=UserStatus.ACTIVE,
         )
     )
@@ -261,7 +261,7 @@ def test_create_and_store_uses_current_user_as_cs_identity(
 ):
     analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
 
-    assert analysis.user_id == current_user.id
+    assert analysis.owner_id == current_user.id
     assert analysis.cs_id == str(current_user.id)
     assert analysis.cs_name == current_user.name
 
@@ -293,3 +293,36 @@ def test_run_pipeline_does_not_depend_on_settings_defaults(
     called_metadata = service.engine.run_pipeline.call_args.args[1]
     assert called_metadata.cs_id == str(current_user.id)
     assert called_metadata.cs_name == current_user.name
+
+
+def test_create_and_store_with_explicit_owner_sets_owner_and_created_by(
+    service: AnalysisService, storage, tmp_path: Path, current_user, db_session
+):
+    gestor = UserRepository(db_session).create(
+        User(
+            name="Gestora Teste",
+            email="gestora@example.com",
+            password_hash="hash",
+            role=UserRole.GESTOR,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    content = b"CS: Oi\nPB: Oi"
+    analysis = service.create_and_store(
+        current_user=gestor,
+        owner=current_user,
+        participant_name="João Silva",
+        objective="Onboarding",
+        objective_complement=None,
+        duration_minutes=45,
+        interaction_date=None,
+        file_name="transcricao.txt",
+        temp_file_path=_write_temp_upload(tmp_path, "transcricao2.txt", content),
+        file_size_bytes=len(content),
+        file_header=content[:4096],
+    )
+
+    assert analysis.owner_id == current_user.id
+    assert analysis.created_by_id == gestor.id
+    assert analysis.cs_id == str(current_user.id)
+    assert analysis.cs_name == current_user.name

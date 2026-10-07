@@ -21,14 +21,14 @@ def admin_user(db_session) -> User:
 @pytest.fixture()
 def regular_user(db_session) -> User:
     return UserRepository(db_session).create(
-        User(name="U1", email="lpeu1@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(name="U1", email="lpeu1@example.com", password_hash="h", role=UserRole.COLABORADOR, status=UserStatus.ACTIVE)
     )
 
 
 @pytest.fixture()
 def other_user(db_session) -> User:
     return UserRepository(db_session).create(
-        User(name="U2", email="lpeu2@example.com", password_hash="h", role=UserRole.USER, status=UserStatus.ACTIVE)
+        User(name="U2", email="lpeu2@example.com", password_hash="h", role=UserRole.COLABORADOR, status=UserStatus.ACTIVE)
     )
 
 

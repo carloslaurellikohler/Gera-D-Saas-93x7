@@ -4,19 +4,25 @@ import ObjectiveSelect from "../components/forms/ObjectiveSelect";
 import FileDropzone from "../components/forms/FileDropzone";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
+import { useAuth } from "../context/AuthContext";
 import { useCreateAnalysis } from "../hooks/useCreateAnalysis";
+import { useTeamMembers } from "../hooks/useTeamMembers";
 import type { Objective } from "../types/analysis";
 import { EXTENSIONS_BY_CHOICE, MAX_UPLOAD_MB, type InputTypeChoice } from "../lib/uploadConstraints";
 import { ApiError } from "../api/client";
 
 export default function NewAnalysisPage() {
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  const isGestor = hasRole("GESTOR");
   const createAnalysis = useCreateAnalysis();
+  const team = useTeamMembers();
 
   const [participantName, setParticipantName] = useState("");
   const [objective, setObjective] = useState<Objective | "">("");
   const [objectiveComplement, setObjectiveComplement] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("");
+  const [ownerId, setOwnerId] = useState("");
   const [inputChoice, setInputChoice] = useState<InputTypeChoice>("texto");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -40,6 +46,10 @@ export default function NewAnalysisPage() {
       setSubmitError("Selecione um arquivo.");
       return;
     }
+    if (isGestor && !ownerId) {
+      setSubmitError("Atribua a análise a um colaborador da sua equipe.");
+      return;
+    }
 
     try {
       const analysis = await createAnalysis.mutateAsync({
@@ -47,6 +57,7 @@ export default function NewAnalysisPage() {
         objective,
         objective_complement: objective === "Outro" ? objectiveComplement : undefined,
         duration_minutes: durationMinutes ? Number(durationMinutes) : undefined,
+        owner_id: isGestor ? ownerId : undefined,
         file,
       });
       navigate(`/analyses/${analysis.id}/processing`);
@@ -76,6 +87,24 @@ export default function NewAnalysisPage() {
             placeholder="Nome do participante"
           />
         </div>
+
+        {isGestor && (
+          <div className="form-field">
+            <label htmlFor="owner">Atribuir a</label>
+            <select
+              id="owner"
+              value={ownerId}
+              onChange={(e) => setOwnerId(e.target.value)}
+            >
+              <option value="">Selecione um colaborador</option>
+              {(team.data ?? []).map((colaborador) => (
+                <option key={colaborador.id} value={colaborador.id}>
+                  {colaborador.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="form-row">
           <div className="form-field">

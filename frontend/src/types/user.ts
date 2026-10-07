@@ -5,12 +5,14 @@ export interface CreateUserPayload {
   email: string;
   password: string;
   role: UserRole;
+  manager_id?: string | null;
 }
 
 export interface UpdateUserPayload {
   name: string;
   email: string;
   role: UserRole;
+  manager_id?: string | null;
 }
 
 export interface ResetPasswordPayload {

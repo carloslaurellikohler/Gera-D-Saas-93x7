@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.user import User, UserRole
 from app.repositories.methodology_repository import MethodologyRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.analysis import (
     AnalysisListItem,
     AnalysisResponse,
@@ -37,15 +38,25 @@ _TRANSCRIPTION_READY_STATUSES = {
 }
 
 
+def _owner_scope(current_user: User, db: Session) -> list[uuid.UUID] | None:
+    """Lista de owner_ids visíveis para o usuário autenticado: None para ADMIN (sem
+    filtro, vê tudo), a equipe para GESTOR, ou só o próprio id para COLABORADOR."""
+    if current_user.role == UserRole.ADMIN:
+        return None
+    if current_user.role == UserRole.GESTOR:
+        return [u.id for u in UserRepository(db).list_subordinates(current_user.id)]
+    return [current_user.id]
+
+
 def _get_owned_or_404(
-    service: AnalysisService, analysis_id: uuid.UUID, current_user: User
+    service: AnalysisService, analysis_id: uuid.UUID, current_user: User, db: Session
 ) -> Analysis:
     analysis = service.repo.get(analysis_id)
-    # Dono ou ADMIN podem ver/alterar; qualquer outro usuário autenticado recebe o
-    # mesmo 404 de "não existe", para não revelar a existência de IDs alheios.
-    if analysis is None or (
-        current_user.role != UserRole.ADMIN and analysis.user_id != current_user.id
-    ):
+    # Dono, Gestor da equipe do dono, ou ADMIN podem ver/alterar; qualquer outro
+    # usuário autenticado recebe o mesmo 404 de "não existe", para não revelar a
+    # existência de IDs alheios.
+    owner_ids = _owner_scope(current_user, db)
+    if analysis is None or (owner_ids is not None and analysis.owner_id not in owner_ids):
         raise HTTPException(status_code=404, detail="Análise não encontrada.")
     return analysis
 
@@ -57,16 +68,33 @@ def create_analysis(
     objective_complement: str | None = Form(None),
     duration_minutes: int | None = Form(None),
     interaction_date: date | None = Form(None),
+    owner_id: uuid.UUID | None = Form(None),
     file: UploadFile = File(...),
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
+    owner: User | None = None
+    if current_user.role == UserRole.GESTOR:
+        subordinates = {u.id: u for u in UserRepository(db).list_subordinates(current_user.id)}
+        if owner_id is None or owner_id not in subordinates:
+            raise HTTPException(
+                status_code=404 if owner_id is not None else 422,
+                detail=(
+                    "Colaborador não encontrado na sua equipe."
+                    if owner_id is not None
+                    else "Atribua a análise a um colaborador da sua equipe."
+                ),
+            )
+        owner = subordinates[owner_id]
+
     try:
         with buffer_upload(
             file.file, service.settings.MAX_UPLOAD_MB, service.settings.STORAGE_DIR
         ) as streamed:
             analysis = service.create_and_store(
                 current_user=current_user,
+                owner=owner,
                 participant_name=participant_name,
                 objective=objective.value,
                 objective_complement=objective_complement,
@@ -91,10 +119,11 @@ def list_analyses(
     page_size: int = Query(20, ge=1, le=100),
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     offset = (page - 1) * page_size
-    user_id = None if current_user.role == UserRole.ADMIN else current_user.id
-    items = service.repo.list(status=status, user_id=user_id, offset=offset, limit=page_size)
+    owner_ids = _owner_scope(current_user, db)
+    items = service.repo.list(status=status, owner_ids=owner_ids, offset=offset, limit=page_size)
     return PaginatedResponse(items=items, total=len(items), page=page, page_size=page_size)
 
 
@@ -103,8 +132,9 @@ def get_analysis(
     analysis_id: uuid.UUID,
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return _get_owned_or_404(service, analysis_id, current_user)
+    return _get_owned_or_404(service, analysis_id, current_user, db)
 
 
 @router.get("/{analysis_id}/status", response_model=AnalysisStatusResponse)
@@ -112,8 +142,9 @@ def get_analysis_status(
     analysis_id: uuid.UUID,
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return _get_owned_or_404(service, analysis_id, current_user)
+    return _get_owned_or_404(service, analysis_id, current_user, db)
 
 
 @router.get("/{analysis_id}/transcription", response_model=AnalysisTranscriptionResponse)
@@ -121,8 +152,9 @@ def get_transcription(
     analysis_id: uuid.UUID,
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    analysis = _get_owned_or_404(service, analysis_id, current_user)
+    analysis = _get_owned_or_404(service, analysis_id, current_user, db)
     if analysis.status not in _TRANSCRIPTION_READY_STATUSES:
         raise HTTPException(status_code=409, detail="Transcrição ainda não está disponível.")
     return AnalysisTranscriptionResponse(id=analysis.id, transcription=analysis.transcription)
@@ -137,7 +169,7 @@ def get_report(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    analysis = _get_owned_or_404(service, analysis_id, current_user)
+    analysis = _get_owned_or_404(service, analysis_id, current_user, db)
     if analysis.status != AnalysisStatus.COMPLETED:
         raise HTTPException(status_code=409, detail="A análise ainda não foi concluída.")
 
@@ -162,8 +194,9 @@ def delete_analysis(
     analysis_id: uuid.UUID,
     service: AnalysisService = Depends(get_analysis_service),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    analysis = _get_owned_or_404(service, analysis_id, current_user)
+    analysis = _get_owned_or_404(service, analysis_id, current_user, db)
     for ref in (analysis.file_path, analysis.executive_report_path, analysis.detailed_report_path):
         if ref:
             service.storage.delete(ref)

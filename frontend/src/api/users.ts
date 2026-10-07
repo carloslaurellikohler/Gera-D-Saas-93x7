@@ -16,6 +16,10 @@ export function listUsers(filters: UserFilters = {}) {
   return apiGet<User[]>(`/users${query ? `?${query}` : ""}`);
 }
 
+export function listMyTeam() {
+  return apiGet<User[]>("/users/me/team");
+}
+
 export function createUser(payload: CreateUserPayload) {
   return apiPost<User>("/users", payload);
 }

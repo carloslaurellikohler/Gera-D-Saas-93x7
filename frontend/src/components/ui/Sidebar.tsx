@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import type { UserRole } from "../../types/auth";
 import Icon from "./Icon";
 
 interface NavItem {
@@ -7,7 +8,7 @@ interface NavItem {
   end?: boolean;
   icon: string;
   label: string;
-  adminOnly?: boolean;
+  allow?: UserRole[];
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -19,10 +20,16 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const ADMIN_NAV_ITEMS: NavItem[] = [
-  { to: "/admin", icon: "insights", label: "Painel administrativo", adminOnly: true },
-  { to: "/calibracao", icon: "tune", label: "Metodologia", adminOnly: true },
-  { to: "/usuarios", icon: "group", label: "Usuários", adminOnly: true },
+  { to: "/admin", icon: "insights", label: "Painel administrativo", allow: ["ADMIN"] },
+  { to: "/calibracao", icon: "tune", label: "Metodologia", allow: ["ADMIN"] },
+  { to: "/usuarios", icon: "group", label: "Usuários", allow: ["ADMIN"] },
 ];
+
+export const ROLE_BADGE_CLASS: Record<UserRole, string> = {
+  ADMIN: "admin",
+  GESTOR: "gestor",
+  COLABORADOR: "colaborador",
+};
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -33,7 +40,7 @@ function initialsOf(name: string): string {
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
+  const visibleAdminItems = ADMIN_NAV_ITEMS.filter((item) => !item.allow || (user && item.allow.includes(user.role)));
 
   return (
     <aside className="ui-sidebar">
@@ -58,10 +65,10 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        {isAdmin && (
+        {visibleAdminItems.length > 0 && (
           <>
             <div className="ui-sidebar-section-label">Administração</div>
-            {ADMIN_NAV_ITEMS.map((item) => (
+            {visibleAdminItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -79,7 +86,7 @@ export default function Sidebar() {
         <span className="ui-sidebar-avatar">{user ? initialsOf(user.name) : ""}</span>
         <span className="ui-sidebar-user-info">
           <span className="ui-sidebar-user-name">{user?.name}</span>
-          <span className={`ui-sidebar-role ui-sidebar-role-${isAdmin ? "admin" : "user"}`}>
+          <span className={`ui-sidebar-role ui-sidebar-role-${user ? ROLE_BADGE_CLASS[user.role] : "colaborador"}`}>
             {user?.role}
           </span>
         </span>

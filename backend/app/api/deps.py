@@ -60,7 +60,11 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
 
 
 def get_dashboard_service(db: Session = Depends(get_db)) -> DashboardService:
-    return DashboardService(repo=DashboardRepository(db), methodology_repo=MethodologyRepository(db))
+    return DashboardService(
+        repo=DashboardRepository(db),
+        methodology_repo=MethodologyRepository(db),
+        user_repo=UserRepository(db),
+    )
 
 
 def get_methodology_service(db: Session = Depends(get_db)) -> MethodologyService:
@@ -68,7 +72,7 @@ def get_methodology_service(db: Session = Depends(get_db)) -> MethodologyService
 
 
 def get_metrics_service(db: Session = Depends(get_db)) -> MetricsService:
-    return MetricsService(repo=MetricsRepository(db))
+    return MetricsService(repo=MetricsRepository(db), user_repo=UserRepository(db))
 
 
 def get_content_service(

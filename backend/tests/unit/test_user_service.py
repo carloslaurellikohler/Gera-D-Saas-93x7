@@ -10,6 +10,8 @@ from app.repositories.user_repository import UserRepository
 from app.services.user_service import (
     CannotDeactivateSelfError,
     EmailAlreadyExistsError,
+    GestorComEquipeError,
+    InvalidManagerAssignmentError,
     UserNotFoundError,
     UserService,
 )
@@ -23,7 +25,7 @@ def service(db_session) -> UserService:
 def test_create_user_hashes_password_and_defaults_role(service):
     user = service.create_user(name="Ana Souza", email="ana@example.com", password="correct-password")
 
-    assert user.role == UserRole.USER
+    assert user.role == UserRole.COLABORADOR
     assert user.status == UserStatus.ACTIVE
     assert verify_password("correct-password", user.password_hash)
 
@@ -49,7 +51,7 @@ def test_update_user_changes_fields(service):
 
 def test_update_user_not_found_raises(service):
     with pytest.raises(UserNotFoundError):
-        service.update_user(uuid.uuid4(), name="X", email="x@example.com", role=UserRole.USER)
+        service.update_user(uuid.uuid4(), name="X", email="x@example.com", role=UserRole.COLABORADOR)
 
 
 def test_update_user_rejects_email_colliding_with_another_user(service):
@@ -57,13 +59,13 @@ def test_update_user_rejects_email_colliding_with_another_user(service):
     bruno = service.create_user(name="Bruno Lima", email="bruno@example.com", password="correct-password")
 
     with pytest.raises(EmailAlreadyExistsError):
-        service.update_user(bruno.id, name="Bruno Lima", email="ana@example.com", role=UserRole.USER)
+        service.update_user(bruno.id, name="Bruno Lima", email="ana@example.com", role=UserRole.COLABORADOR)
 
 
 def test_update_user_keeps_own_email(service):
     user = service.create_user(name="Ana Souza", email="ana@example.com", password="correct-password")
 
-    updated = service.update_user(user.id, name="Ana Souza", email="ana@example.com", role=UserRole.USER)
+    updated = service.update_user(user.id, name="Ana Souza", email="ana@example.com", role=UserRole.COLABORADOR)
 
     assert updated.email == "ana@example.com"
 
@@ -123,3 +125,96 @@ def test_reset_password_updates_hash(service):
 def test_reset_password_not_found_raises(service):
     with pytest.raises(UserNotFoundError):
         service.reset_password(uuid.uuid4(), new_password="new-password-123")
+
+
+def test_create_colaborador_with_valid_manager_id(service):
+    gestor = service.create_user(name="Gestor", email="gestor@example.com", password="correct-password", role=UserRole.GESTOR)
+
+    colaborador = service.create_user(
+        name="Ana Souza",
+        email="ana@example.com",
+        password="correct-password",
+        role=UserRole.COLABORADOR,
+        manager_id=gestor.id,
+    )
+
+    assert colaborador.manager_id == gestor.id
+
+
+def test_create_colaborador_with_manager_id_de_outro_colaborador_rejeitado(service):
+    outro = service.create_user(name="Outro", email="outro@example.com", password="correct-password")
+
+    with pytest.raises(InvalidManagerAssignmentError):
+        service.create_user(
+            name="Ana Souza",
+            email="ana@example.com",
+            password="correct-password",
+            role=UserRole.COLABORADOR,
+            manager_id=outro.id,
+        )
+
+
+def test_create_gestor_with_manager_id_rejeitado(service):
+    outro_gestor = service.create_user(
+        name="Outro Gestor", email="outro-gestor@example.com", password="correct-password", role=UserRole.GESTOR
+    )
+
+    with pytest.raises(InvalidManagerAssignmentError):
+        service.create_user(
+            name="Gestor 2",
+            email="gestor2@example.com",
+            password="correct-password",
+            role=UserRole.GESTOR,
+            manager_id=outro_gestor.id,
+        )
+
+
+def test_create_colaborador_with_manager_id_de_gestor_inativo_rejeitado(service):
+    gestor = service.create_user(
+        name="Gestor", email="gestor@example.com", password="correct-password", role=UserRole.GESTOR
+    )
+    service.repo.update(gestor.id, status=UserStatus.INACTIVE)
+
+    with pytest.raises(InvalidManagerAssignmentError):
+        service.create_user(
+            name="Ana Souza",
+            email="ana@example.com",
+            password="correct-password",
+            role=UserRole.COLABORADOR,
+            manager_id=gestor.id,
+        )
+
+
+def test_despromover_gestor_com_equipe_rejeitado(service):
+    gestor = service.create_user(
+        name="Gestor", email="gestor@example.com", password="correct-password", role=UserRole.GESTOR
+    )
+    service.create_user(
+        name="Ana Souza",
+        email="ana@example.com",
+        password="correct-password",
+        role=UserRole.COLABORADOR,
+        manager_id=gestor.id,
+    )
+
+    with pytest.raises(GestorComEquipeError):
+        service.update_user(gestor.id, name=gestor.name, email=gestor.email, role=UserRole.COLABORADOR)
+
+
+def test_desativar_gestor_com_equipe_rejeitado(service):
+    admin = service.create_user(
+        name="Admin", email="admin3@example.com", password="correct-password", role=UserRole.ADMIN
+    )
+    gestor = service.create_user(
+        name="Gestor", email="gestor@example.com", password="correct-password", role=UserRole.GESTOR
+    )
+    service.create_user(
+        name="Ana Souza",
+        email="ana@example.com",
+        password="correct-password",
+        role=UserRole.COLABORADOR,
+        manager_id=gestor.id,
+    )
+
+    with pytest.raises(GestorComEquipeError):
+        service.set_status(gestor.id, new_status=UserStatus.INACTIVE, current_user=admin)

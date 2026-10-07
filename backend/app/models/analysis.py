@@ -53,10 +53,19 @@ class Analysis(Base):
     )
     error_message: Mapped[str | None] = mapped_column(Text)
 
-    # Dono da análise (usuário autenticado que a criou). Nullable: análises criadas
-    # antes da Fase 3 ficam órfãs (SET NULL se o usuário for removido), nunca com uma
-    # proveniência fictícia — toda análise nova sempre recebe um user_id real.
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    # Dono da análise (colaborador avaliado — cujas métricas/dashboard contam o
+    # registro). Nullable: análises criadas antes da Fase 3 ficam órfãs (SET NULL se
+    # o usuário for removido), nunca com uma proveniência fictícia — toda análise nova
+    # sempre recebe um owner_id real.
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+
+    # Quem de fato fez o upload (pode ser o próprio dono, ou o Gestor da equipe dele
+    # subindo em nome de um colaborador). Distinto de owner_id desde a Fase de
+    # hierarquia Gestor/Colaborador — antes disso, criador e dono eram sempre a mesma
+    # pessoa (ver migration c3f5e9a72d64).
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
 

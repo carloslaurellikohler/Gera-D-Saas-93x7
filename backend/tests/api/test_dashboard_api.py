@@ -66,3 +66,23 @@ def test_period_param_limits_query_window(client):
 def test_invalid_period_param_rejected(client):
     response = client.get("/api/v1/dashboard/stats", params={"period": "1y"})
     assert response.status_code == 422
+
+
+def test_gestor_sees_team_board_not_global_board(client_factory):
+    from app.models.user import UserRole
+
+    gestor_client, gestor = client_factory(role=UserRole.GESTOR)
+    colaborador_client, colaborador = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+    outsider_client, _ = client_factory(role=UserRole.COLABORADOR)
+
+    _create_analysis(gestor_client, owner_id=str(colaborador.id), participant_name="Ana")
+    _create_analysis(outsider_client, participant_name="Bruno")
+
+    response = gestor_client.get("/api/v1/dashboard/stats")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["board"] is None
+    assert body["team_board"] is not None
+    total_volume = sum(item["count"] for item in body["volume_by_status"])
+    assert total_volume == 1
