@@ -1,6 +1,11 @@
 import { apiGet, apiPost, apiPut } from "./client";
 import type { User } from "../types/auth";
-import type { CreateUserPayload, UpdateUserPayload, UserFilters } from "../types/user";
+import type {
+  CreateUserPayload,
+  ResetPasswordPayload,
+  UpdateUserPayload,
+  UserFilters,
+} from "../types/user";
 
 export function listUsers(filters: UserFilters = {}) {
   const params = new URLSearchParams();
@@ -25,4 +30,8 @@ export function activateUser(id: string) {
 
 export function deactivateUser(id: string) {
   return apiPost<User>(`/users/${id}/deactivate`);
+}
+
+export function resetUserPassword(id: string, payload: ResetPasswordPayload) {
+  return apiPost<User>(`/users/${id}/reset-password`, payload);
 }

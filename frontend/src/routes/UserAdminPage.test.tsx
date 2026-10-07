@@ -197,6 +197,42 @@ describe("UserAdminPage", () => {
     expect(selfDeactivateButton).toBeDisabled();
   });
 
+  it("resets another user's password from the modal", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    const resetSpy = vi.spyOn(usersApi, "resetUserPassword").mockResolvedValue(OTHER_USER);
+
+    renderPage();
+    await screen.findByText("Ana Souza");
+
+    await user.click(screen.getAllByRole("button", { name: "Redefinir senha" })[1]);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText('Redefinir senha de "Ana Souza"')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Nova senha para Ana Souza"), "new-password-123");
+    await user.click(within(dialog).getByRole("button", { name: "Redefinir senha" }));
+
+    expect(resetSpy).toHaveBeenCalledWith("user-1", { password: "new-password-123" });
+  });
+
+  it("rejects resetting a password shorter than 8 characters", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    const resetSpy = vi.spyOn(usersApi, "resetUserPassword").mockResolvedValue(OTHER_USER);
+
+    renderPage();
+    await screen.findByText("Ana Souza");
+
+    await user.click(screen.getAllByRole("button", { name: "Redefinir senha" })[1]);
+    const dialog = await screen.findByRole("dialog");
+    await user.type(screen.getByLabelText("Nova senha para Ana Souza"), "short");
+    await user.click(within(dialog).getByRole("button", { name: "Redefinir senha" }));
+
+    expect(await screen.findByText("A senha deve ter ao menos 8 caracteres.")).toBeInTheDocument();
+    expect(resetSpy).not.toHaveBeenCalled();
+  });
+
   it("filters the list by role when a pill is clicked", async () => {
     const listSpy = vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
     const user = userEvent.setup();

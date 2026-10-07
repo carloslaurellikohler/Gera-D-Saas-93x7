@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import get_user_service, require_role
 from app.models.user import User, UserRole, UserStatus
-from app.schemas.user import UserCreateIn, UserResponse, UserUpdateIn
+from app.schemas.user import AdminResetPasswordIn, UserCreateIn, UserResponse, UserUpdateIn
 from app.services.user_service import (
     CannotDeactivateSelfError,
     EmailAlreadyExistsError,
@@ -82,3 +82,16 @@ def deactivate_user(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except CannotDeactivateSelfError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/{user_id}/reset-password", response_model=UserResponse)
+def reset_password(
+    user_id: uuid.UUID,
+    payload: AdminResetPasswordIn,
+    service: UserService = Depends(get_user_service),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        return service.reset_password(user_id, new_password=payload.password)
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

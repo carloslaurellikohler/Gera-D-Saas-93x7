@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { ApiError } from "../api/client";
+import ResetPasswordForm from "../components/forms/ResetPasswordForm";
 import UserForm from "../components/forms/UserForm";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorBanner from "../components/ui/ErrorBanner";
@@ -44,6 +45,7 @@ export default function UserAdminPage() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
   const [formMode, setFormMode] = useState<UserFormMode | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const users = useUsers({
@@ -107,6 +109,16 @@ export default function UserAdminPage() {
         />
       </Modal>
 
+      <Modal
+        open={resetPasswordUser !== null}
+        title={`Redefinir senha de "${resetPasswordUser?.name}"`}
+        onClose={() => setResetPasswordUser(null)}
+      >
+        {resetPasswordUser && (
+          <ResetPasswordForm user={resetPasswordUser} onDone={() => setResetPasswordUser(null)} />
+        )}
+      </Modal>
+
       <div style={{ display: "flex", gap: 12, alignItems: "center", margin: "20px 0" }}>
         <span className="search-field" style={{ width: 280 }}>
           <Icon name="search" size={20} />
@@ -152,7 +164,7 @@ export default function UserAdminPage() {
         <div className="data-table">
           <div
             className="data-table-row data-table-head"
-            style={{ gridTemplateColumns: "minmax(0,1.6fr) 130px 150px 140px 90px" }}
+            style={{ gridTemplateColumns: "minmax(0,1.6fr) 130px 150px 140px 120px" }}
           >
             <span>Usuário</span>
             <span>Papel</span>
@@ -168,7 +180,7 @@ export default function UserAdminPage() {
                 key={u.id}
                 className="data-table-row"
                 style={{
-                  gridTemplateColumns: "minmax(0,1.6fr) 130px 150px 140px 90px",
+                  gridTemplateColumns: "minmax(0,1.6fr) 130px 150px 140px 120px",
                   opacity: u.status === "INACTIVE" ? 0.6 : 1,
                 }}
               >
@@ -198,6 +210,15 @@ export default function UserAdminPage() {
                     style={iconButtonStyle}
                   >
                     <Icon name="edit" size={20} color="var(--content-secondary)" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Redefinir senha"
+                    aria-label="Redefinir senha"
+                    onClick={() => setResetPasswordUser(u)}
+                    style={iconButtonStyle}
+                  >
+                    <Icon name="key" size={20} color="var(--content-secondary)" />
                   </button>
                   <button
                     type="button"

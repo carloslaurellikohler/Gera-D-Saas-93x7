@@ -13,6 +13,10 @@ export interface UpdateUserPayload {
   role: UserRole;
 }
 
+export interface ResetPasswordPayload {
+  password: string;
+}
+
 export interface UserFilters {
   role?: UserRole;
   status?: UserStatus;

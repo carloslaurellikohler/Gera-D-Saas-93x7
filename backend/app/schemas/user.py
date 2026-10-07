@@ -17,6 +17,12 @@ def _validate_email_format(value: str) -> str:
     return value
 
 
+def _validate_password_strength(value: str) -> str:
+    if len(value) < 8:
+        raise ValueError("Senha deve ter ao menos 8 caracteres.")
+    return value
+
+
 class UserCreateIn(BaseModel):
     name: str
     email: str
@@ -38,9 +44,7 @@ class UserCreateIn(BaseModel):
     @field_validator("password")
     @classmethod
     def _password_min_length(cls, value: str) -> str:
-        if len(value) < 8:
-            raise ValueError("Senha deve ter ao menos 8 caracteres.")
-        return value
+        return _validate_password_strength(value)
 
 
 class UserUpdateIn(BaseModel):
@@ -59,6 +63,15 @@ class UserUpdateIn(BaseModel):
     @classmethod
     def _email_format(cls, value: str) -> str:
         return _validate_email_format(value)
+
+
+class AdminResetPasswordIn(BaseModel):
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def _password_min_length(cls, value: str) -> str:
+        return _validate_password_strength(value)
 
 
 class UserResponse(BaseModel):

@@ -64,3 +64,9 @@ class UserService:
         if user is None:
             raise UserNotFoundError()
         return self.repo.update(user_id, status=new_status)
+
+    def reset_password(self, user_id: uuid.UUID, *, new_password: str) -> User:
+        user = self.repo.get(user_id)
+        if user is None:
+            raise UserNotFoundError()
+        return self.repo.update(user_id, password_hash=hash_password(new_password))

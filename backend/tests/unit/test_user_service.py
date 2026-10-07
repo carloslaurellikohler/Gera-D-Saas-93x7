@@ -109,3 +109,17 @@ def test_set_status_not_found_raises(service):
 
     with pytest.raises(UserNotFoundError):
         service.set_status(uuid.uuid4(), new_status=UserStatus.INACTIVE, current_user=admin)
+
+
+def test_reset_password_updates_hash(service):
+    user = service.create_user(name="Ana Souza", email="ana@example.com", password="correct-password")
+
+    updated = service.reset_password(user.id, new_password="new-password-123")
+
+    assert verify_password("new-password-123", updated.password_hash)
+    assert not verify_password("correct-password", updated.password_hash)
+
+
+def test_reset_password_not_found_raises(service):
+    with pytest.raises(UserNotFoundError):
+        service.reset_password(uuid.uuid4(), new_password="new-password-123")

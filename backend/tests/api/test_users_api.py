@@ -197,3 +197,95 @@ def test_deactivate_requires_admin(client, client_factory):
     response = client.post(f"/api/v1/users/{target_user.id}/deactivate")
 
     assert response.status_code == 403
+
+
+def test_reset_password_as_admin(admin_client):
+    target = admin_client.post(
+        "/api/v1/users",
+        json={
+            "name": "Ana Souza",
+            "email": "ana@example.com",
+            "password": "correct-password",
+            "role": "USER",
+        },
+    ).json()
+
+    response = admin_client.post(
+        f"/api/v1/users/{target['id']}/reset-password", json={"password": "new-password-123"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "password" not in body
+    assert "password_hash" not in body
+
+
+def test_reset_password_changes_login_credentials(admin_client):
+    target = admin_client.post(
+        "/api/v1/users",
+        json={
+            "name": "Ana Souza",
+            "email": "ana@example.com",
+            "password": "correct-password",
+            "role": "USER",
+        },
+    ).json()
+    admin_client.post(
+        f"/api/v1/users/{target['id']}/reset-password", json={"password": "new-password-123"}
+    )
+
+    old_password_login = admin_client.post(
+        "/api/v1/auth/login", json={"email": "ana@example.com", "password": "correct-password"}
+    )
+    new_password_login = admin_client.post(
+        "/api/v1/auth/login", json={"email": "ana@example.com", "password": "new-password-123"}
+    )
+
+    assert old_password_login.status_code == 401
+    assert new_password_login.status_code == 200
+
+
+def test_reset_password_rejects_short_password(admin_client):
+    target = admin_client.post(
+        "/api/v1/users",
+        json={
+            "name": "Ana Souza",
+            "email": "ana@example.com",
+            "password": "correct-password",
+            "role": "USER",
+        },
+    ).json()
+
+    response = admin_client.post(
+        f"/api/v1/users/{target['id']}/reset-password", json={"password": "short"}
+    )
+
+    assert response.status_code == 422
+
+
+def test_reset_password_not_found(admin_client):
+    response = admin_client.post(
+        f"/api/v1/users/{uuid.uuid4()}/reset-password", json={"password": "new-password-123"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_reset_password_requires_admin(client, client_factory):
+    _, target_user = client_factory(role=UserRole.USER)
+
+    response = client.post(
+        f"/api/v1/users/{target_user.id}/reset-password", json={"password": "new-password-123"}
+    )
+
+    assert response.status_code == 403
+
+
+def test_reset_password_requires_auth(unauthenticated_client, client_factory):
+    _, target_user = client_factory(role=UserRole.USER)
+
+    response = unauthenticated_client.post(
+        f"/api/v1/users/{target_user.id}/reset-password", json={"password": "new-password-123"}
+    )
+
+    assert response.status_code == 401
