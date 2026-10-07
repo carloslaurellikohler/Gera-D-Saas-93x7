@@ -1,25 +1,21 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useConfirm } from "../context/ConfirmContext";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
-import FileDropzone from "../components/forms/FileDropzone";
+import Modal from "../components/ui/Modal";
 import InProgressTab from "../components/library/InProgressTab";
+import MaterialForm from "../components/library/MaterialForm";
+import TrailForm from "../components/library/TrailForm";
 import { useContentLibrary } from "../hooks/useContentLibrary";
-import { useCreateContent } from "../hooks/useCreateContent";
-import { useCreateLearningPath } from "../hooks/useCreateLearningPath";
 import { useDeleteContent } from "../hooks/useDeleteContent";
 import { useDeleteLearningPath } from "../hooks/useDeleteLearningPath";
-import { useLearningPath } from "../hooks/useLearningPath";
 import { useLearningPaths } from "../hooks/useLearningPaths";
 import { useRecommendedPaths } from "../hooks/useRecommendedPaths";
-import { useUpdateContent } from "../hooks/useUpdateContent";
-import { useUpdateLearningPath } from "../hooks/useUpdateLearningPath";
-import { CONTENT_EXTENSIONS, CONTENT_MAX_UPLOAD_MB } from "../lib/contentUploadConstraints";
 import { ApiError } from "../api/client";
-import type { ContentKind, ContentResponse, CriterionKey } from "../types/content";
+import type { ContentResponse, CriterionKey } from "../types/content";
 import type { LearningPathSummary } from "../types/learningPath";
 
 type LibraryTab = "trilhas" | "materiais" | "andamento";
@@ -38,8 +34,6 @@ const CRITERION_LABELS: Record<CriterionKey, string> = {
   encaminhamento: "Encaminhamento",
   eficiencia_conducao: "Eficiência da condução",
 };
-
-const CRITERION_OPTIONS = Object.entries(CRITERION_LABELS) as [CriterionKey, string][];
 
 export default function LibraryPage() {
   const [tab, setTab] = useState<LibraryTab>("trilhas");
@@ -116,12 +110,8 @@ function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
 
       {isAdmin && (
         <div style={{ marginBottom: 16 }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setFormMode((m) => (m ? null : { mode: "create" }))}
-          >
-            {formMode ? "Cancelar" : "Nova trilha"}
+          <button type="button" className="btn btn-secondary" onClick={() => setFormMode({ mode: "create" })}>
+            Nova trilha
           </button>
         </div>
       )}
@@ -130,11 +120,18 @@ function TrailsTab({ isAdmin }: { isAdmin: boolean }) {
           <ErrorBanner>{actionError}</ErrorBanner>
         </div>
       )}
-      {isAdmin && formMode && (
-        <TrailForm
-          onDone={() => setFormMode(null)}
-          editing={formMode.mode === "edit" ? formMode.path : undefined}
-        />
+      {isAdmin && (
+        <Modal
+          open={formMode !== null}
+          title={formMode?.mode === "edit" ? "Editar trilha" : "Nova trilha"}
+          onClose={() => setFormMode(null)}
+          size="large"
+        >
+          <TrailForm
+            onDone={() => setFormMode(null)}
+            editing={formMode?.mode === "edit" ? formMode.path : undefined}
+          />
+        </Modal>
       )}
 
       {paths.isLoading && <p className="page-subtitle">Carregando...</p>}
@@ -230,112 +227,6 @@ const cardActionButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-function TrailForm({ onDone, editing }: { onDone: () => void; editing?: LearningPathSummary }) {
-  const content = useContentLibrary();
-  const createPath = useCreateLearningPath();
-  const updatePath = useUpdateLearningPath();
-  const editingDetail = useLearningPath(editing?.id ?? "");
-
-  const [title, setTitle] = useState(editing?.title ?? "");
-  const [criterionKey, setCriterionKey] = useState<CriterionKey | "">(editing?.criterion_key ?? "");
-  const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
-  const [itemsLoaded, setItemsLoaded] = useState(!editing);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (editing && editingDetail.data && !itemsLoaded) {
-      const sortedItems = [...editingDetail.data.items].sort((a, b) => a.order_index - b.order_index);
-      setSelectedContentIds(sortedItems.map((item) => item.content.id));
-      setItemsLoaded(true);
-    }
-  }, [editing, editingDetail.data, itemsLoaded]);
-
-  const toggleContent = (contentId: string) => {
-    setSelectedContentIds((current) =>
-      current.includes(contentId) ? current.filter((id) => id !== contentId) : [...current, contentId],
-    );
-  };
-
-  const isPending = editing ? updatePath.isPending : createPath.isPending;
-
-  const handleSubmit = async () => {
-    setError(null);
-    if (!title.trim()) {
-      setError("Informe um título para a trilha.");
-      return;
-    }
-    const payload = {
-      title,
-      criterion_key: criterionKey || undefined,
-      items: selectedContentIds.map((contentId, index) => ({ content_id: contentId, order_index: index })),
-    };
-    try {
-      if (editing) {
-        await updatePath.mutateAsync({ id: editing.id, payload });
-      } else {
-        await createPath.mutateAsync(payload);
-      }
-      onDone();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : `Erro ao ${editing ? "salvar" : "criar"} trilha.`);
-    }
-  };
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      {error && <ErrorBanner>{error}</ErrorBanner>}
-
-      <div className="form-field" style={{ marginTop: error ? 18 : 0 }}>
-        <label htmlFor="trail-title">Título da trilha</label>
-        <input id="trail-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-
-      <div className="form-field">
-        <label htmlFor="trail-criterion">Critério associado</label>
-        <select
-          id="trail-criterion"
-          value={criterionKey}
-          onChange={(e) => setCriterionKey(e.target.value as CriterionKey | "")}
-        >
-          <option value="">Nenhum</option>
-          {CRITERION_OPTIONS.map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="form-field">
-        <label>Materiais (na ordem desejada)</label>
-        {content.data && content.data.length === 0 && (
-          <span className="page-subtitle">Cadastre materiais na aba "Materiais de apoio" primeiro.</span>
-        )}
-        {content.data && content.data.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {content.data.map((item) => (
-              <label key={item.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={selectedContentIds.includes(item.id)}
-                  onChange={() => toggleContent(item.id)}
-                />
-                {item.title}
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 6 }}>
-        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={isPending}>
-          {isPending ? "Salvando..." : editing ? "Salvar alterações" : "Criar trilha"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 type MaterialFormMode = { mode: "create" } | { mode: "edit"; item: ContentResponse };
 
 function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
@@ -367,12 +258,8 @@ function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
     <>
       {isAdmin && (
         <div style={{ marginBottom: 16 }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setFormMode((m) => (m ? null : { mode: "create" }))}
-          >
-            {formMode ? "Cancelar" : "Adicionar material"}
+          <button type="button" className="btn btn-secondary" onClick={() => setFormMode({ mode: "create" })}>
+            Adicionar material
           </button>
         </div>
       )}
@@ -381,11 +268,17 @@ function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
           <ErrorBanner>{actionError}</ErrorBanner>
         </div>
       )}
-      {isAdmin && formMode && (
-        <MaterialForm
-          onDone={() => setFormMode(null)}
-          editing={formMode.mode === "edit" ? formMode.item : undefined}
-        />
+      {isAdmin && (
+        <Modal
+          open={formMode !== null}
+          title={formMode?.mode === "edit" ? "Editar material" : "Adicionar material"}
+          onClose={() => setFormMode(null)}
+        >
+          <MaterialForm
+            onDone={() => setFormMode(null)}
+            editing={formMode?.mode === "edit" ? formMode.item : undefined}
+          />
+        </Modal>
       )}
 
       {content.isLoading && <p className="page-subtitle">Carregando...</p>}
@@ -451,155 +344,5 @@ function MaterialsTab({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
     </>
-  );
-}
-
-function MaterialForm({ onDone, editing }: { onDone: () => void; editing?: ContentResponse }) {
-  const createContent = useCreateContent();
-  const updateContent = useUpdateContent();
-
-  const [title, setTitle] = useState(editing?.title ?? "");
-  const [description, setDescription] = useState(editing?.description ?? "");
-  const [criterionKey, setCriterionKey] = useState<CriterionKey | "">(editing?.criterion_key ?? "");
-  const [kind, setKind] = useState<ContentKind>(editing?.kind ?? "LINK");
-  const [file, setFile] = useState<File | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const [externalUrl, setExternalUrl] = useState(editing?.external_url ?? "");
-  const [error, setError] = useState<string | null>(null);
-
-  const isPending = editing ? updateContent.isPending : createContent.isPending;
-
-  const handleSubmit = async () => {
-    setError(null);
-    if (!title.trim()) {
-      setError("Informe um título para o material.");
-      return;
-    }
-    if (!editing && kind === "FILE" && !file) {
-      setError("Selecione um arquivo PDF.");
-      return;
-    }
-    if (kind === "LINK" && !externalUrl.trim()) {
-      setError("Informe a URL externa.");
-      return;
-    }
-    try {
-      if (editing) {
-        await updateContent.mutateAsync({
-          id: editing.id,
-          payload: {
-            title,
-            description: description || undefined,
-            criterion_key: criterionKey || undefined,
-            file: kind === "FILE" ? file ?? undefined : undefined,
-            external_url: kind === "LINK" ? externalUrl : undefined,
-          },
-        });
-      } else {
-        await createContent.mutateAsync({
-          title,
-          description: description || undefined,
-          criterion_key: criterionKey || undefined,
-          kind,
-          file: kind === "FILE" ? file ?? undefined : undefined,
-          external_url: kind === "LINK" ? externalUrl : undefined,
-        });
-      }
-      onDone();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : `Erro ao ${editing ? "salvar" : "cadastrar"} material.`);
-    }
-  };
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      {error && <ErrorBanner>{error}</ErrorBanner>}
-
-      <div className="form-field" style={{ marginTop: error ? 18 : 0 }}>
-        <label htmlFor="material-title">Título</label>
-        <input id="material-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-
-      <div className="form-field">
-        <label htmlFor="material-description">Descrição</label>
-        <input
-          id="material-description"
-          type="text"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </div>
-
-      <div className="form-row">
-        <div className="form-field">
-          <label htmlFor="material-criterion">Critério associado</label>
-          <select
-            id="material-criterion"
-            value={criterionKey}
-            onChange={(e) => setCriterionKey(e.target.value as CriterionKey | "")}
-          >
-            <option value="">Nenhum</option>
-            {CRITERION_OPTIONS.map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Tipo de material</label>
-          {editing ? (
-            <span className="page-subtitle">{kind === "FILE" ? "Arquivo PDF" : "Link externo"}</span>
-          ) : (
-            <div className="input-type-choice">
-              <button type="button" className={kind === "LINK" ? "active" : ""} onClick={() => setKind("LINK")}>
-                Link externo
-              </button>
-              <button type="button" className={kind === "FILE" ? "active" : ""} onClick={() => setKind("FILE")}>
-                Arquivo PDF
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {kind === "FILE" ? (
-        <div className="form-field">
-          <label>Arquivo{editing ? " (deixe em branco para manter o atual)" : ""}</label>
-          <FileDropzone
-            extensions={CONTENT_EXTENSIONS}
-            maxUploadMb={CONTENT_MAX_UPLOAD_MB}
-            file={file}
-            onFileSelected={(selected, err) => {
-              setFile(selected);
-              setFileError(err);
-            }}
-          />
-          {fileError && (
-            <p className="error-text">
-              <Icon name="error" size={16} />
-              {fileError}
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="form-field">
-          <label htmlFor="material-url">URL externa</label>
-          <input
-            id="material-url"
-            type="url"
-            placeholder="https://..."
-            value={externalUrl}
-            onChange={(e) => setExternalUrl(e.target.value)}
-          />
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 6 }}>
-        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={isPending}>
-          {isPending ? "Salvando..." : editing ? "Salvar alterações" : "Adicionar material"}
-        </button>
-      </div>
-    </div>
   );
 }
