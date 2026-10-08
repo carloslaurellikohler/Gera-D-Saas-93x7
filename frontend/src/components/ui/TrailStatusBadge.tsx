@@ -24,7 +24,7 @@ export default function TrailStatusBadge({ status }: Props) {
   const v = VARIANTS[status];
   return (
     <span className="ui-status-badge" style={{ background: v.bg, color: v.fg, borderColor: v.bd }}>
-      <Icon name={v.icon} size={15} />
+      <Icon name={v.icon} size={15} spin={status === "IN_PROGRESS"} />
       {v.label}
     </span>
   );

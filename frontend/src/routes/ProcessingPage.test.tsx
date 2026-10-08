@@ -57,6 +57,8 @@ describe("ProcessingPage", () => {
     // etapa anterior (transcrição) já concluída
     const list = screen.getByRole("list");
     expect(list.textContent).toContain("Transcrição concluída");
+    // ícone da etapa ativa deve girar, indicando processo em andamento
+    expect(list.querySelector(".ui-stepper-item-active .ui-icon-spin")).not.toBeNull();
   });
 
   it("shows the error message and a back link when the analysis failed", async () => {

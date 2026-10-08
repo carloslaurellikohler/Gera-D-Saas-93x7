@@ -20,20 +20,24 @@ export default function AssistantPage() {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView?.({ block: "end" });
-  }, [history.data?.messages.length, sendMessage.isPending]);
+  }, [history.data?.messages.length, sendMessage.isPending, pendingUserMessage]);
 
   async function handleSend(content: string) {
     const trimmed = content.trim();
     if (!trimmed || sendMessage.isPending) return;
     setError(null);
+    setInput("");
+    setPendingUserMessage(trimmed);
     try {
       await sendMessage.mutateAsync(trimmed);
-      setInput("");
+      setPendingUserMessage(null);
     } catch (err) {
+      setPendingUserMessage(null);
       if (err instanceof ApiError && err.status === 429) {
         setRateLimited(true);
       } else {
@@ -165,6 +169,24 @@ export default function AssistantPage() {
             </div>
           ))}
 
+          {pendingUserMessage && (
+            <div
+              style={{
+                alignSelf: "flex-end",
+                maxWidth: "70%",
+                background: "var(--gerad-navy)",
+                color: "#fff",
+                borderRadius: "16px 16px 4px 16px",
+                padding: "12px 16px",
+                fontSize: 14,
+                lineHeight: 1.55,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {pendingUserMessage}
+            </div>
+          )}
+
           {sendMessage.isPending && (
             <div
               style={{
@@ -178,7 +200,10 @@ export default function AssistantPage() {
                 color: "var(--content-tertiary)",
               }}
             >
-              Pensando...
+              Pensando
+              <span className="ui-thinking-dot">.</span>
+              <span className="ui-thinking-dot">.</span>
+              <span className="ui-thinking-dot">.</span>
             </div>
           )}
 

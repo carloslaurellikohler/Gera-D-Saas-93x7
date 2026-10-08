@@ -10,6 +10,8 @@ interface Variant {
   icon: string;
 }
 
+const SPINNING_STATUSES: AnalysisStatus[] = ["TRANSCRIBING", "ANALYZING", "GENERATING_REPORTS"];
+
 const VARIANTS: Record<AnalysisStatus, Variant> = {
   CREATED: { bg: "#ECEEF2", fg: "#333846", bd: "#C4C9D3", icon: "draft" },
   UPLOADED: { bg: "#ECEEF2", fg: "#333846", bd: "#C4C9D3", icon: "upload" },
@@ -37,7 +39,7 @@ export default function StatusBadge({ status }: Props) {
         borderStyle: v.dashed ? "dashed" : "solid",
       }}
     >
-      <Icon name={v.icon} size={15} />
+      <Icon name={v.icon} size={15} spin={SPINNING_STATUSES.includes(status)} />
       {formatStatus(status)}
     </span>
   );

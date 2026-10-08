@@ -35,6 +35,7 @@ export default function StatusChecklist({ currentStatus }: Props) {
                   name={isDone ? "check" : isActive ? "progress_activity" : "radio_button_unchecked"}
                   size={18}
                   filled={isDone}
+                  spin={isActive}
                 />
               </span>
               {index < STEPS.length - 1 && <span className="ui-stepper-line" />}

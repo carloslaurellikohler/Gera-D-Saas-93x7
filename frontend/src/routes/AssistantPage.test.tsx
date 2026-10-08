@@ -70,6 +70,37 @@ describe("AssistantPage", () => {
     expect(sendSpy.mock.calls[0]?.[0]).toBe("Como evoluí desde o mês passado?");
   });
 
+  it("clears the input and shows the user message before the reply arrives", async () => {
+    const user = userEvent.setup();
+    const pendingUserTurn: ChatMessageResponse = {
+      id: "m3",
+      role: "user",
+      content: "pergunta pendente",
+      created_at: "2026-01-01T00:00:02Z",
+    };
+    vi.spyOn(assistantApi, "getChatHistory")
+      .mockResolvedValueOnce({ messages: [] })
+      .mockResolvedValueOnce({ messages: [pendingUserTurn, ASSISTANT_MESSAGE] });
+    let resolveSend: (value: ChatMessageResponse) => void = () => {};
+    vi.spyOn(assistantApi, "sendChatMessage").mockImplementation(
+      () => new Promise((resolve) => { resolveSend = resolve; }),
+    );
+
+    renderPage();
+
+    const input = await screen.findByPlaceholderText("Pergunte sobre a metodologia ou sobre suas análises");
+    await user.type(input, "pergunta pendente{enter}");
+
+    expect(input).toHaveValue("");
+    expect(await screen.findByText("pergunta pendente")).toBeInTheDocument();
+    expect(screen.getByText("Pensando")).toBeInTheDocument();
+
+    resolveSend(ASSISTANT_MESSAGE);
+
+    expect(await screen.findByText("O Pilar 7 representa o conteúdo/resultado da conversa.")).toBeInTheDocument();
+    expect(screen.getAllByText("pergunta pendente")).toHaveLength(1);
+  });
+
   it("shows a generic error banner when sending fails", async () => {
     const user = userEvent.setup();
     vi.spyOn(assistantApi, "getChatHistory").mockResolvedValue({ messages: [] });

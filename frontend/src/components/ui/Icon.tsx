@@ -7,13 +7,14 @@ interface Props {
   color?: string;
   className?: string;
   style?: CSSProperties;
+  spin?: boolean;
 }
 
-export default function Icon({ name, size = 20, filled = false, color, className, style }: Props) {
+export default function Icon({ name, size = 20, filled = false, color, className, style, spin = false }: Props) {
   return (
     <span
       aria-hidden="true"
-      className={`material-symbols-rounded${className ? ` ${className}` : ""}`}
+      className={`material-symbols-rounded${spin ? " ui-icon-spin" : ""}${className ? ` ${className}` : ""}`}
       style={{
         fontSize: size,
         color,
