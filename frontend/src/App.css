@@ -383,6 +383,10 @@ h3 {
 .input-type-choice button {
   flex: 1;
   height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border-radius: var(--corner-medium);
   border: 1px solid var(--border-primary);
   background: var(--background-primary);

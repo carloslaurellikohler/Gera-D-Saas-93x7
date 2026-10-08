@@ -151,6 +151,7 @@ export default function NewAnalysisPage() {
               className={inputChoice === "audio" ? "active" : ""}
               onClick={() => handleInputChoice("audio")}
             >
+              <Icon name="graphic_eq" size={18} />
               Áudio
             </button>
             <button
@@ -158,6 +159,7 @@ export default function NewAnalysisPage() {
               className={inputChoice === "video" ? "active" : ""}
               onClick={() => handleInputChoice("video")}
             >
+              <Icon name="videocam" size={18} />
               Vídeo
             </button>
             <button
@@ -165,6 +167,7 @@ export default function NewAnalysisPage() {
               className={inputChoice === "texto" ? "active" : ""}
               onClick={() => handleInputChoice("texto")}
             >
+              <Icon name="description" size={18} />
               Texto
             </button>
           </div>
@@ -204,11 +207,16 @@ export default function NewAnalysisPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="card">
           <span className="kpi-label">Formatos aceitos</span>
-          <p style={{ fontSize: 13, lineHeight: 1.6, marginTop: 10 }}>
-            Transcrição: <b>.docx, .txt</b>
-            <br />
-            Áudio e vídeo: <b>.mp3, .mp4</b>
-            <br />
+          <p style={{ fontSize: 13, lineHeight: 1.6, marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="description" size={16} /> Transcrição: <b>.docx, .txt</b>
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.6, display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="graphic_eq" size={16} /> Áudio: <b>.mp3</b>
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.6, display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="videocam" size={16} /> Vídeo: <b>.mp4</b>
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.6 }}>
             Tamanho máximo:{" "}
             <b>
               {MAX_UPLOAD_MB >= 1024 ? `${MAX_UPLOAD_MB / 1024} GB` : `${MAX_UPLOAD_MB} MB`}
