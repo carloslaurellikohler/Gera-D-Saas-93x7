@@ -35,6 +35,20 @@ export interface AiCostBreakdownItem {
   total_usd: number;
   events: number;
   pct: string;
+  // Permite distinguir "custou pouco" de "não sei quanto custou" — com US$ 0 nos dois
+  // casos, seriam indistinguíveis.
+  unpriced_events: number;
+}
+
+/** Modelo que já consumiu API sem ter preço cadastrado. `model` é a string exata gravada
+ *  nos eventos (para chat, o nome que a API reporta) — é essa que precisa ser cadastrada,
+ *  não a do .env. */
+export interface AiUnpricedModel {
+  model: string;
+  operation: AiCostOperation;
+  events: number;
+  first_seen: string;
+  last_seen: string;
 }
 
 export interface AiCostTrendPoint {

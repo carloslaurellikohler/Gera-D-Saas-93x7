@@ -4,9 +4,10 @@ import { useConfirm } from "../../context/ConfirmContext";
 import { useAiCostConfig } from "../../hooks/useAiCostConfig";
 import { useAiModelPrices } from "../../hooks/useAiModelPrices";
 import { useRecalculateAiModelPrice } from "../../hooks/useRecalculateAiModelPrice";
+import { useUnpricedAiModels } from "../../hooks/useUnpricedAiModels";
 import { useUpdateAiCostConfig } from "../../hooks/useUpdateAiCostConfig";
 import { formatDate, formatDateTime } from "../../lib/format";
-import type { AiModelPrice } from "../../types/aiCost";
+import type { AiCostOperation, AiModelPrice } from "../../types/aiCost";
 import AiModelPriceForm from "../forms/AiModelPriceForm";
 import EmptyState from "../ui/EmptyState";
 import ErrorBanner from "../ui/ErrorBanner";
@@ -21,6 +22,7 @@ function priceCell(value: number | null): string {
 
 export default function CostSettingsTab() {
   const prices = useAiModelPrices();
+  const unpriced = useUnpricedAiModels();
   const config = useAiCostConfig();
   const updateConfig = useUpdateAiCostConfig();
   const recalculate = useRecalculateAiModelPrice();
@@ -28,6 +30,9 @@ export default function CostSettingsTab() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AiModelPrice | undefined>(undefined);
+  const [prefill, setPrefill] = useState<{ model: string; operation: AiCostOperation } | undefined>(
+    undefined,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -166,6 +171,65 @@ export default function CostSettingsTab() {
         </div>
       </div>
 
+      {/* Fecha o laço entre o que roda e o que está cadastrado. O nome aqui é a string
+          exata que a API reportou — cadastrar o nome do .env pode não casar, porque a
+          OpenAI costuma responder com snapshot datado (ex.: gpt-4.1-2025-04-14). */}
+      {unpriced.data && unpriced.data.length > 0 && (
+        <div
+          className="card"
+          style={{ marginBottom: 16, borderLeft: "3px solid var(--content-alert)" }}
+        >
+          <h3 style={{ marginBottom: 4 }}>Modelos em uso sem preço cadastrado</h3>
+          <p className="page-subtitle" style={{ marginBottom: 14 }}>
+            Estas chamadas já aconteceram mas não entram no total. O nome abaixo é o que a
+            API de fato reportou — cadastre exatamente ele.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {unpriced.data.map((item) => (
+              <div
+                key={`${item.model}-${item.operation}`}
+                style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13 }}
+              >
+                <code
+                  style={{
+                    background: "var(--background-secondary)",
+                    padding: "2px 8px",
+                    borderRadius: "var(--corner-extra-small)",
+                    fontFamily: "var(--font-mono)",
+                  }}
+                >
+                  {item.model}
+                </code>
+                <span style={{ color: "var(--content-secondary)" }}>{item.operation}</span>
+                <span style={{ color: "var(--content-secondary)", flex: 1 }}>
+                  {item.events} {item.events === 1 ? "chamada" : "chamadas"} · última em{" "}
+                  {formatDate(item.last_seen)}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  // Rótulo distinto por linha: com vários pendentes, "Cadastrar preço"
+                  // sozinho não diz a qual modelo se refere.
+                  aria-label={`Cadastrar preço de ${item.model}`}
+                  style={{ height: 32, padding: "0 14px" }}
+                  onClick={() => {
+                    setEditing(undefined);
+                    setPrefill({ model: item.model, operation: item.operation });
+                    setFormOpen(true);
+                  }}
+                >
+                  Cadastrar preço
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="page-subtitle" style={{ marginTop: 14, fontSize: 12 }}>
+            Cadastrar o preço passa a custear as chamadas <strong>novas</strong>. Para
+            reprecificar as que já aconteceram, use "recalcular histórico" na linha do preço.
+          </p>
+        </div>
+      )}
+
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div className="page-title-group">
           <h3>Preços por modelo</h3>
@@ -178,6 +242,7 @@ export default function CostSettingsTab() {
           className="btn btn-primary"
           onClick={() => {
             setEditing(undefined);
+            setPrefill(undefined);
             setFormOpen(true);
           }}
         >
@@ -259,6 +324,7 @@ export default function CostSettingsTab() {
                   aria-label={`Editar preço de ${price.model}`}
                   onClick={() => {
                     setEditing(price);
+                    setPrefill(undefined);
                     setFormOpen(true);
                   }}
                   style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}
@@ -282,10 +348,14 @@ export default function CostSettingsTab() {
 
       <Modal
         open={formOpen}
-        title={editing ? "Editar preço" : "Cadastrar preço"}
+        title={editing ? "Editar preço" : prefill ? `Cadastrar preço de ${prefill.model}` : "Cadastrar preço"}
         onClose={() => setFormOpen(false)}
       >
-        <AiModelPriceForm editing={editing} onDone={() => setFormOpen(false)} />
+        <AiModelPriceForm
+          editing={editing}
+          prefill={prefill}
+          onDone={() => setFormOpen(false)}
+        />
       </Modal>
     </div>
   );

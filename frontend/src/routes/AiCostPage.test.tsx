@@ -6,7 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AiCostPage from "./AiCostPage";
 import { ConfirmProvider } from "../context/ConfirmContext";
 import * as aiCostsApi from "../api/aiCosts";
-import type { AiCostSummary, AiModelPrice, AiUsageEventPage } from "../types/aiCost";
+import type {
+  AiCostSummary,
+  AiModelPrice,
+  AiUnpricedModel,
+  AiUsageEventPage,
+} from "../types/aiCost";
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -46,20 +51,20 @@ const SUMMARY: AiCostSummary = {
     failed_calls: 1,
   },
   by_feature: [
-    { key: "ANALYSIS", label: "Análises", total_usd: 12.2, events: 38, pct: "99%" },
-    { key: "ASSISTANT", label: "Assistente de IA", total_usd: 0.14, events: 10, pct: "1%" },
+    { key: "ANALYSIS", label: "Análises", total_usd: 12.2, events: 38, pct: "99%", unpriced_events: 0 },
+    { key: "ASSISTANT", label: "Assistente de IA", total_usd: 0.14, events: 10, pct: "1%", unpriced_events: 0 },
   ],
   by_operation: [
-    { key: "CHAT", label: "Chat (análise e assistente)", total_usd: 11.9, events: 40, pct: "96%" },
-    { key: "TRANSCRIPTION", label: "Transcrição de áudio", total_usd: 0.44, events: 6, pct: "4%" },
+    { key: "CHAT", label: "Chat (análise e assistente)", total_usd: 11.9, events: 40, pct: "96%", unpriced_events: 0 },
+    { key: "TRANSCRIPTION", label: "Transcrição de áudio", total_usd: 0.44, events: 6, pct: "4%", unpriced_events: 0 },
   ],
   by_model: [
-    { key: "gpt-6-sol", label: "gpt-6-sol", total_usd: 11.8, events: 36, pct: "96%" },
-    { key: "whisper-1", label: "whisper-1", total_usd: 0.44, events: 6, pct: "4%" },
+    { key: "gpt-6-sol", label: "gpt-6-sol", total_usd: 11.8, events: 36, pct: "96%", unpriced_events: 0 },
+    { key: "whisper-1", label: "whisper-1", total_usd: 0.44, events: 6, pct: "4%", unpriced_events: 0 },
   ],
   by_stage: [
-    { key: "TRAINING", label: "T&D e avaliação final", total_usd: 4.2, events: 6, pct: "34%" },
-    { key: "FACT_EXTRACTION", label: "Extração factual", total_usd: 2.1, events: 6, pct: "17%" },
+    { key: "TRAINING", label: "T&D e avaliação final", total_usd: 4.2, events: 6, pct: "34%", unpriced_events: 0 },
+    { key: "FACT_EXTRACTION", label: "Extração factual", total_usd: 2.1, events: 6, pct: "17%", unpriced_events: 0 },
   ],
   trend: [{ period_start: "2026-10-07", total_usd: 12.34, events: 48 }],
   trend_by_feature: [
@@ -176,6 +181,7 @@ beforeEach(() => {
   vi.spyOn(aiCostsApi, "getAiCostSummary").mockResolvedValue(SUMMARY);
   vi.spyOn(aiCostsApi, "listAiCostEvents").mockResolvedValue(EVENTS);
   vi.spyOn(aiCostsApi, "listAiModelPrices").mockResolvedValue(PRICES);
+  vi.spyOn(aiCostsApi, "listUnpricedAiModels").mockResolvedValue([]);
   vi.spyOn(aiCostsApi, "getAiCostConfig").mockResolvedValue({
     warn_threshold_pct: 80,
     usd_to_brl_rate: 5.4,
@@ -279,5 +285,72 @@ describe("AiCostPage", () => {
     expect(
       await screen.findByText("Não foi possível carregar os indicadores de custo."),
     ).toBeInTheDocument();
+  });
+  it("marca o modelo sem preço em vez de mostrar US$ 0 ambíguo", async () => {
+    vi.spyOn(aiCostsApi, "getAiCostSummary").mockResolvedValue({
+      ...SUMMARY,
+      by_model: [
+        { key: "gpt-6-sol", label: "gpt-6-sol", total_usd: 11.8, events: 36, pct: "100%", unpriced_events: 0 },
+        { key: "gpt-6-luna", label: "gpt-6-luna", total_usd: 0, events: 4, pct: "0%", unpriced_events: 4 },
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("sem preço")).toBeInTheDocument();
+    // "não apurado" deixa explícito que não é custo zero, é custo desconhecido.
+    expect(screen.getByText("não apurado")).toBeInTheDocument();
+  });
+
+  it("lista os modelos em uso sem preço com o nome exato reportado pela API", async () => {
+    const pendentes: AiUnpricedModel[] = [
+      {
+        model: "gpt-6-sol-2026-05-01",
+        operation: "CHAT",
+        events: 12,
+        first_seen: "2026-10-05T10:00:00Z",
+        last_seen: "2026-10-07T18:00:00Z",
+      },
+    ];
+    vi.spyOn(aiCostsApi, "listUnpricedAiModels").mockResolvedValue(pendentes);
+
+    renderPage();
+    await screen.findByText("Custo total no período");
+    await userEvent.click(screen.getByRole("button", { name: "Preços e orçamento" }));
+
+    expect(await screen.findByText("Modelos em uso sem preço cadastrado")).toBeInTheDocument();
+    // O snapshot datado, que é o que precisa ser cadastrado — não o nome do .env.
+    expect(screen.getByText("gpt-6-sol-2026-05-01")).toBeInTheDocument();
+    expect(screen.getByText(/12 chamadas · última em 07\/10\/2026/)).toBeInTheDocument();
+  });
+
+  it("pré-preenche o formulário com o nome exato do modelo pendente", async () => {
+    vi.spyOn(aiCostsApi, "listUnpricedAiModels").mockResolvedValue([
+      {
+        model: "gpt-6-sol-2026-05-01",
+        operation: "CHAT",
+        events: 12,
+        first_seen: "2026-10-05T10:00:00Z",
+        last_seen: "2026-10-07T18:00:00Z",
+      },
+    ]);
+
+    renderPage();
+    await screen.findByText("Custo total no período");
+    await userEvent.click(screen.getByRole("button", { name: "Preços e orçamento" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Cadastrar preço de gpt-6-sol-2026-05-01" }),
+    );
+
+    expect(await screen.findByLabelText("Modelo")).toHaveValue("gpt-6-sol-2026-05-01");
+  });
+
+  it("não mostra a seção de pendências quando todo modelo tem preço", async () => {
+    renderPage();
+    await screen.findByText("Custo total no período");
+    await userEvent.click(screen.getByRole("button", { name: "Preços e orçamento" }));
+
+    await screen.findByText("whisper-1");
+    expect(screen.queryByText("Modelos em uso sem preço cadastrado")).not.toBeInTheDocument();
   });
 });

@@ -7,6 +7,7 @@ import type {
   AiModelPrice,
   AiModelPricePayload,
   AiRecalculateResult,
+  AiUnpricedModel,
   AiUsageEventFilters,
   AiUsageEventPage,
 } from "../types/aiCost";
@@ -28,6 +29,10 @@ export function listAiCostEvents(filters: AiUsageEventFilters = {}) {
 
 export function listAiModelPrices() {
   return apiGet<AiModelPrice[]>("/ai-costs/prices");
+}
+
+export function listUnpricedAiModels() {
+  return apiGet<AiUnpricedModel[]>("/ai-costs/unpriced-models");
 }
 
 export function createAiModelPrice(payload: AiModelPricePayload) {

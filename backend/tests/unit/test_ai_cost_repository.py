@@ -424,3 +424,48 @@ def test_importar_so_o_modelo_de_custo_resolve_as_fks():
     assert result.returncode == 0, result.stderr
     assert "REFERENCES analyses" in result.stdout
     assert "REFERENCES users" in result.stdout
+
+
+def test_breakdown_distingue_modelo_sem_preco_de_modelo_barato(repo, cenario):
+    """Com US$ 0 nos dois casos, só a contagem de não precificados separa 'custou pouco'
+    de 'não sei quanto custou'."""
+    modelos = {row.key: row for row in repo.breakdown_by(dimension="model", since=_since())}
+
+    assert modelos["modelo-sem-preco"].unpriced_events == 1
+    assert modelos["gpt-6-sol"].unpriced_events == 0
+
+
+def test_unpriced_models_lista_o_nome_exato_gravado_nos_eventos(repo, cenario):
+    """É esta lista, e não a variável de ambiente, que diz o que cadastrar: para chat,
+    gravamos o nome que a API reporta, que pode ser um snapshot datado."""
+    linhas = repo.unpriced_models()
+
+    assert [(row.model, row.operation, row.events) for row in linhas] == [
+        ("modelo-sem-preco", "CHAT", 1)
+    ]
+    assert linhas[0].first_seen is not None
+    assert linhas[0].last_seen is not None
+
+
+def test_unpriced_models_ignora_periodo(repo, cenario, db_session):
+    """Informação de configuração, não de análise: um modelo usado há meses continua
+    precisando de preço para o histórico daquele mês fechar certo."""
+    db_session.add(
+        AiUsageEvent(
+            occurred_at=_utcnow() - timedelta(days=200),
+            feature=AiUsageFeature.ANALYSIS,
+            operation=AiUsageOperation.CHAT,
+            model="modelo-antigo-sem-preco",
+            cost_usd=Decimal("0"),
+            cost_status=AiUsageCostStatus.NO_PRICE,
+        )
+    )
+    db_session.commit()
+
+    modelos = {row.model for row in repo.unpriced_models()}
+
+    assert "modelo-antigo-sem-preco" in modelos
+
+
+def test_unpriced_models_vazio_quando_tudo_tem_preco(repo, db_session):
+    assert repo.unpriced_models() == []

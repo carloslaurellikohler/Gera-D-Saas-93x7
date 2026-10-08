@@ -77,10 +77,45 @@ class AiCostRepository:
     def breakdown_by(self, *, dimension: Dimension, since: date) -> list[Row]:
         column = _DIMENSION_COLUMNS[dimension]
         stmt = (
-            select(cast(column, String).label("key"), _TOTAL.label("total_usd"), func.count().label("events"))
+            select(
+                cast(column, String).label("key"),
+                _TOTAL.label("total_usd"),
+                func.count().label("events"),
+                # Sem isto, um modelo sem preço aparece com US$ 0 e fica indistinguível de
+                # um modelo que é barato de verdade — justamente a ambiguidade que a tela
+                # precisa eliminar.
+                func.count()
+                .filter(AiUsageEvent.cost_status == AiUsageCostStatus.NO_PRICE)
+                .label("unpriced_events"),
+            )
             .where(AiUsageEvent.occurred_at >= since)
             .group_by(column)
             .order_by(_TOTAL.desc())
+        )
+        return list(self.db.execute(stmt).all())
+
+    def unpriced_models(self) -> list[Row]:
+        """Pares (modelo, operação) que já geraram chamadas sem preço cadastrado.
+
+        Sem recorte de período de propósito: é informação de configuração, não de análise.
+        Um modelo usado há três meses continua precisando de preço para que o histórico
+        daquele mês feche corretamente.
+
+        É esta lista — e não a variável de ambiente — que diz quais nomes cadastrar: para
+        chat, gravamos o nome que a API de fato reporta (muitas vezes um snapshot datado),
+        que é o que será faturado.
+        """
+        stmt = (
+            select(
+                AiUsageEvent.model,
+                cast(AiUsageEvent.operation, String).label("operation"),
+                func.count().label("events"),
+                func.min(AiUsageEvent.occurred_at).label("first_seen"),
+                func.max(AiUsageEvent.occurred_at).label("last_seen"),
+            )
+            .where(AiUsageEvent.cost_status == AiUsageCostStatus.NO_PRICE)
+            .group_by(AiUsageEvent.model, AiUsageEvent.operation)
+            .order_by(func.count().desc())
         )
         return list(self.db.execute(stmt).all())
 

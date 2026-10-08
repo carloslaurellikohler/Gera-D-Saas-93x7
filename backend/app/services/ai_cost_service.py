@@ -39,6 +39,7 @@ from app.schemas.ai_cost import (
     AiCostTrendPoint,
     AiCostUserRow,
     AiModelPriceResponse,
+    AiUnpricedModel,
     AiUsageEventItem,
     AiUsageEventPage,
     Period,
@@ -203,6 +204,7 @@ class AiCostService:
                     total_usd=_float(row.total_usd),
                     events=row.events,
                     pct=_format_pct(_dec(row.total_usd), total),
+                    unpriced_events=row.unpriced_events or 0,
                 )
             )
         return items
@@ -378,6 +380,21 @@ class AiCostService:
             if current is not None:
                 current_ids.add(current.id)
         return [_price_response(price, is_current=price.id in current_ids) for price in prices]
+
+    def list_unpriced_models(self) -> list[AiUnpricedModel]:
+        """Modelos que já consumiram API mas não têm preço. É o atalho que fecha o laço
+        entre o que roda e o que está cadastrado: para chat, o nome gravado é o que a API
+        reporta (muitas vezes um snapshot datado), e não necessariamente o do .env."""
+        return [
+            AiUnpricedModel(
+                model=row.model,
+                operation=row.operation,
+                events=row.events,
+                first_seen=row.first_seen,
+                last_seen=row.last_seen,
+            )
+            for row in self.repo.unpriced_models()
+        ]
 
     def create_price(self, *, current_user: User, payload, today: date | None = None) -> AiModelPriceResponse:
         self._validate_price_payload(payload)

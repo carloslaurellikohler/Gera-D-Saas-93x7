@@ -391,3 +391,90 @@ def test_limiar_de_alerta_fora_da_faixa_e_recusado(admin_client):
         admin_client.put("/api/v1/ai-costs/config", json={"warn_threshold_pct": 0}).status_code
         == 422
     )
+
+
+# --- Modelos sem preço (fecha o laço entre o que roda e o que está cadastrado) ---
+
+
+def test_unpriced_models_exige_admin(client):
+    assert client.get("/api/v1/ai-costs/unpriced-models").status_code == 403
+
+
+def test_unpriced_models_vazio_quando_nao_ha_chamada_sem_preco(admin_client, some_events):
+    assert admin_client.get("/api/v1/ai-costs/unpriced-models").json() == []
+
+
+def test_unpriced_models_expoe_o_nome_exato_a_cadastrar(admin_client, db_session):
+    """O nome gravado vem de response_metadata["model_name"] — a API costuma devolver um
+    snapshot datado, diferente do que está no .env. É este nome que precisa ser cadastrado."""
+    db_session.add(
+        AiUsageEvent(
+            occurred_at=datetime.now(timezone.utc),
+            feature=AiUsageFeature.ANALYSIS,
+            operation=AiUsageOperation.CHAT,
+            stage="TRAINING",
+            model="gpt-6-sol-2026-05-01",
+            input_tokens=1000,
+            output_tokens=100,
+            cost_usd=Decimal("0"),
+            cost_status=AiUsageCostStatus.NO_PRICE,
+        )
+    )
+    db_session.commit()
+
+    body = admin_client.get("/api/v1/ai-costs/unpriced-models").json()
+
+    assert len(body) == 1
+    assert body[0]["model"] == "gpt-6-sol-2026-05-01"
+    assert body[0]["operation"] == "CHAT"
+    assert body[0]["events"] == 1
+
+
+def test_summary_marca_quais_modelos_estao_sem_preco(admin_client, db_session):
+    db_session.add(
+        AiUsageEvent(
+            occurred_at=datetime.now(timezone.utc),
+            feature=AiUsageFeature.ANALYSIS,
+            operation=AiUsageOperation.CHAT,
+            model="modelo-desconhecido",
+            cost_usd=Decimal("0"),
+            cost_status=AiUsageCostStatus.NO_PRICE,
+        )
+    )
+    db_session.commit()
+
+    por_modelo = {m["key"]: m for m in admin_client.get("/api/v1/ai-costs/summary").json()["by_model"]}
+
+    assert por_modelo["modelo-desconhecido"]["unpriced_events"] == 1
+
+
+def test_cadastrar_o_preco_tira_o_modelo_da_lista_de_pendentes(admin_client, db_session):
+    """Cadastrar não reprecifica o histórico (snapshot congelado), mas o modelo sai da
+    lista de pendências assim que o recálculo é pedido."""
+    db_session.add(
+        AiUsageEvent(
+            occurred_at=datetime.now(timezone.utc),
+            feature=AiUsageFeature.ANALYSIS,
+            operation=AiUsageOperation.CHAT,
+            model="gpt-6-sol-2026-05-01",
+            input_tokens=1_000_000,
+            output_tokens=0,
+            cost_usd=Decimal("0"),
+            cost_status=AiUsageCostStatus.NO_PRICE,
+        )
+    )
+    db_session.commit()
+
+    criado = admin_client.post(
+        "/api/v1/ai-costs/prices",
+        json={
+            "model": "gpt-6-sol-2026-05-01",
+            "operation": "CHAT",
+            "valid_from": "2024-01-01",
+            "input_usd_per_mtok": 2.0,
+            "output_usd_per_mtok": 8.0,
+        },
+    ).json()
+    admin_client.post(f"/api/v1/ai-costs/prices/{criado['id']}/recalculate")
+
+    assert admin_client.get("/api/v1/ai-costs/unpriced-models").json() == []

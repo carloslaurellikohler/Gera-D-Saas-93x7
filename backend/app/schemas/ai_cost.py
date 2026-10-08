@@ -55,6 +55,9 @@ class AiCostBreakdownItem(BaseModel):
     total_usd: float
     events: int
     pct: str  # já formatado pelo backend, como em FarolDistributionItem
+    # Quantas das chamadas deste item ficaram sem preço. Permite a tela distinguir "custou
+    # pouco" de "não sei quanto custou", que com US$ 0 seriam indistinguíveis.
+    unpriced_events: int
 
 
 class AiCostTrendPoint(BaseModel):
@@ -159,6 +162,17 @@ class AiUsageEventPage(BaseModel):
     offset: int
     limit: int
     models: list[str]  # alimenta o filtro de modelo sem o frontend adivinhar nomes
+
+
+class AiUnpricedModel(BaseModel):
+    """Modelo que já gerou chamadas mas não tem preço cadastrado. O nome aqui é a string
+    exata gravada nos eventos — é ela que precisa ser cadastrada, não a do .env."""
+
+    model: str
+    operation: str
+    events: int
+    first_seen: datetime
+    last_seen: datetime
 
 
 class AiModelPriceResponse(BaseModel):

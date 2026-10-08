@@ -24,6 +24,7 @@ from app.schemas.ai_cost import (
     AiModelPriceIn,
     AiModelPriceResponse,
     AiRecalculateResponse,
+    AiUnpricedModel,
     AiUsageEventPage,
     Feature,
     Operation,
@@ -79,6 +80,16 @@ def list_prices(
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     return service.list_prices()
+
+
+@router.get("/unpriced-models", response_model=list[AiUnpricedModel])
+def list_unpriced_models(
+    service: AiCostService = Depends(get_ai_cost_service),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Modelos que já geraram chamadas mas não têm preço cadastrado — com o nome exato
+    gravado nos eventos, que é o que precisa ser cadastrado."""
+    return service.list_unpriced_models()
 
 
 @router.post("/prices", response_model=AiModelPriceResponse, status_code=201)

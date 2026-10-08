@@ -24,14 +24,21 @@ function toNumber(value: string): number | null {
 export default function AiModelPriceForm({
   onDone,
   editing,
+  prefill,
 }: {
   onDone: () => void;
   editing?: AiModelPrice;
+  // Nome e operação vindos de um modelo que já consumiu API sem preço. Pré-preencher evita
+  // o erro mais provável: digitar o nome do .env quando a API reporta outro (snapshot
+  // datado), o que deixaria a chamada sem preço de novo.
+  prefill?: { model: string; operation: AiCostOperation };
 }) {
   const savePrice = useSaveAiModelPrice();
 
-  const [model, setModel] = useState(editing?.model ?? "");
-  const [operation, setOperation] = useState<AiCostOperation>(editing?.operation ?? "CHAT");
+  const [model, setModel] = useState(editing?.model ?? prefill?.model ?? "");
+  const [operation, setOperation] = useState<AiCostOperation>(
+    editing?.operation ?? prefill?.operation ?? "CHAT",
+  );
   // Inicializador lazy: `new Date()` não deve rodar a cada render.
   const [validFrom, setValidFrom] = useState(
     () => editing?.valid_from ?? new Date().toISOString().slice(0, 10),

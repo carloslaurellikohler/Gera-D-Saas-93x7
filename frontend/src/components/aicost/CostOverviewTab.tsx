@@ -319,11 +319,37 @@ export default function CostOverviewTab({
                       justifyContent: "space-between",
                       fontSize: 13,
                       marginBottom: 4,
+                      gap: 8,
                     }}
                   >
-                    <span>{item.label}</span>
-                    <span style={{ color: "var(--content-secondary)" }}>
-                      {formatUsd(item.total_usd)} · {item.pct}
+                    <span style={{ minWidth: 0 }}>
+                      {item.label}
+                      {/* Sem este selo, um modelo sem preço mostra US$ 0 e fica
+                          indistinguível de um modelo que é barato de verdade. */}
+                      {item.unpriced_events > 0 && (
+                        <button
+                          type="button"
+                          onClick={onGoToPrices}
+                          className="pill"
+                          title={`${item.unpriced_events} ${item.unpriced_events === 1 ? "chamada" : "chamadas"} sem preço cadastrado — clique para cadastrar`}
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 11,
+                            padding: "1px 6px",
+                            background: "var(--background-alert-n2)",
+                            border: "none",
+                            cursor: "pointer",
+                            font: "inherit",
+                          }}
+                        >
+                          sem preço
+                        </button>
+                      )}
+                    </span>
+                    <span style={{ color: "var(--content-secondary)", whiteSpace: "nowrap" }}>
+                      {item.unpriced_events > 0 && item.total_usd === 0
+                        ? "não apurado"
+                        : `${formatUsd(item.total_usd)} · ${item.pct}`}
                     </span>
                   </div>
                   <div
