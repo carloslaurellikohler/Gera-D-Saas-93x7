@@ -43,8 +43,8 @@ class Settings(BaseSettings):
     SEED_ADMIN_NAME: str = "Administrador"
 
     # --- Assistente de IA (Fase 6) — distinto de OPENAI_MODEL/OPENAI_TEMPERATURE da
-    # engine (gera_d_engine.config), que usa um modelo mais caro (gpt-6-sol) para o
-    # pipeline pesado de análise. Reaproveita a mesma OPENAI_API_KEY do ambiente.
+    # engine (gera_d_engine.config), que usa seu próprio modelo para o pipeline pesado
+    # de análise. Reaproveita a mesma OPENAI_API_KEY do ambiente.
     OPENAI_API_KEY: str | None = None
     ASSISTANT_CHAT_MODEL: str = "gpt-6-luna"
     ASSISTANT_CHAT_TEMPERATURE: float = 0.3

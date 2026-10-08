@@ -1,6 +1,6 @@
 """Fábricas de modelo de chat/embedding do Assistente de IA (Fase 6) — distintas das da
-engine (gera_d_engine.pipeline.llm), que usa um modelo mais caro (OPENAI_MODEL/gpt-6-sol)
-para o pipeline pesado de análise. Pequena duplicação intencional da lógica de prefixo de
+engine (gera_d_engine.pipeline.llm), que usa seu próprio modelo (OPENAI_MODEL) para o
+pipeline pesado de análise. Pequena duplicação intencional da lógica de prefixo de
 "reasoning model", já que o backend não pode importar gera_d_engine fora de
 engine_integration/."""
 
