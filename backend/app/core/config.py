@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     ASSISTANT_CHUNK_SIZE: int = 1200
     ASSISTANT_CHUNK_OVERLAP: int = 200
 
+    # Limitador diário de análises por colaborador (owner_id) — controle de custo/fluxo.
+    # ADMIN é isento quando sobe para si mesmo; GESTOR nunca é isento (o limite é do
+    # colaborador avaliado, não de quem faz upload). Reset à meia-noite UTC.
+    DAILY_ANALYSIS_LIMIT_PER_OWNER: int = 4
+
 
 def get_settings() -> Settings:
     return Settings()

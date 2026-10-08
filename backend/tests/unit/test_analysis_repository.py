@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.models.analysis import Analysis, AnalysisStatus
+from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.user_repository import UserRepository
 
 
 def _new_analysis(**overrides) -> Analysis:
@@ -135,3 +139,52 @@ def test_list_without_user_id_returns_all(db_session):
     result = repo.list()
 
     assert {x.id for x in result} == {a.id, b.id}
+
+
+def _create_user(db_session, email: str) -> User:
+    return UserRepository(db_session).create(
+        User(
+            name="Colaboradora Teste",
+            email=email,
+            password_hash="hash",
+            role=UserRole.COLABORADOR,
+            status=UserStatus.ACTIVE,
+        )
+    )
+
+
+def test_count_today_counts_all_statuses_including_failed(db_session):
+    owner = _create_user(db_session, "owner-count@example.com")
+    repo = AnalysisRepository(db_session)
+    created = repo.create(_new_analysis(interaction_id="interaction-count-1", owner_id=owner.id))
+    failed = repo.create(_new_analysis(interaction_id="interaction-count-2", owner_id=owner.id))
+    repo.update_status(failed.id, AnalysisStatus.FAILED)
+
+    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    count = repo.count_today(owner_id=owner.id, since=since)
+
+    assert count == 2
+    assert created.status == AnalysisStatus.CREATED
+
+
+def test_count_today_respects_since_boundary(db_session):
+    owner = _create_user(db_session, "owner-boundary@example.com")
+    repo = AnalysisRepository(db_session)
+    repo.create(_new_analysis(interaction_id="interaction-count-3", owner_id=owner.id))
+
+    since_in_future = datetime.now(timezone.utc) + timedelta(hours=1)
+    count = repo.count_today(owner_id=owner.id, since=since_in_future)
+
+    assert count == 0
+
+
+def test_count_today_is_scoped_to_owner(db_session):
+    owner_a = _create_user(db_session, "owner-a-scope@example.com")
+    owner_b = _create_user(db_session, "owner-b-scope@example.com")
+    repo = AnalysisRepository(db_session)
+    repo.create(_new_analysis(interaction_id="interaction-count-4", owner_id=owner_b.id))
+
+    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    count = repo.count_today(owner_id=owner_a.id, since=since)
+
+    assert count == 0

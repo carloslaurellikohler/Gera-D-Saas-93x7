@@ -192,4 +192,70 @@ describe("NewAnalysisPage", () => {
     await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
     expect(createSpy.mock.calls[0]?.[0]).toMatchObject({ owner_id: "colab-1" });
   });
+
+  it("shows the quota card with used/limit for a COLABORADOR", async () => {
+    vi.spyOn(analysesApi, "getAnalysisQuota").mockResolvedValue({
+      owner_id: "colab-1",
+      used: 2,
+      limit: 4,
+      remaining: 2,
+      exempt: false,
+    });
+    renderPage();
+
+    expect(await screen.findByText("2 de 4 usadas hoje")).toBeInTheDocument();
+  });
+
+  it("disables submit and shows a warning when the quota is exhausted", async () => {
+    vi.spyOn(analysesApi, "getAnalysisQuota").mockResolvedValue({
+      owner_id: "colab-1",
+      used: 4,
+      limit: 4,
+      remaining: 0,
+      exempt: false,
+    });
+    renderPage();
+
+    await screen.findByText("4 de 4 usadas hoje");
+    expect(screen.getByText("Limite diário atingido para este colaborador.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Iniciar análise/ })).toBeDisabled();
+  });
+
+  it("shows an exempt message instead of the progress bar for an exempt user", async () => {
+    vi.spyOn(analysesApi, "getAnalysisQuota").mockResolvedValue({
+      owner_id: "admin-1",
+      used: 10,
+      limit: 4,
+      remaining: 4,
+      exempt: true,
+    });
+    renderPage();
+
+    expect(await screen.findByText("Sem limite diário (administrador).")).toBeInTheDocument();
+  });
+
+  it("does not query the quota for a GESTOR before a colaborador is selected", async () => {
+    vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(GESTOR);
+    vi.spyOn(usersApi, "listMyTeam").mockResolvedValue([
+      { ...COLABORADOR, id: "colab-1", name: "Colaboradora Teste" },
+    ]);
+    const quotaSpy = vi.spyOn(analysesApi, "getAnalysisQuota").mockResolvedValue({
+      owner_id: "colab-1",
+      used: 1,
+      limit: 4,
+      remaining: 3,
+      exempt: false,
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("option", { name: "Colaboradora Teste" });
+    expect(screen.queryByText("Cota diária de análises")).not.toBeInTheDocument();
+    expect(quotaSpy).not.toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByLabelText("Atribuir a"), "colab-1");
+
+    await screen.findByText("1 de 4 usadas hoje");
+    expect(quotaSpy).toHaveBeenCalledWith("colab-1");
+  });
 });

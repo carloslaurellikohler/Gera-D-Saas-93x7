@@ -123,6 +123,14 @@ export interface CreateAnalysisPayload {
   file: File;
 }
 
+export interface AnalysisQuota {
+  owner_id: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  exempt: boolean;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;

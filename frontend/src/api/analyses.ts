@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPostForm } from "./client";
 import type {
+  AnalysisQuota,
   AnalysisResponse,
   AnalysisResultResponse,
   AnalysisStatusResponse,
@@ -33,6 +34,11 @@ export function getAnalysisResult(id: string) {
 
 export function deleteAnalysis(id: string) {
   return apiDelete(`/analyses/${id}`);
+}
+
+export function getAnalysisQuota(ownerId?: string) {
+  const query = ownerId ? `?owner_id=${ownerId}` : "";
+  return apiGet<AnalysisQuota>(`/analyses/quota${query}`);
 }
 
 export function createAnalysis(payload: CreateAnalysisPayload) {

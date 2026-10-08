@@ -4,7 +4,9 @@ import ObjectiveSelect from "../components/forms/ObjectiveSelect";
 import FileDropzone from "../components/forms/FileDropzone";
 import ErrorBanner from "../components/ui/ErrorBanner";
 import Icon from "../components/ui/Icon";
+import ProgressBar from "../components/ui/ProgressBar";
 import { useAuth } from "../context/AuthContext";
+import { useAnalysisQuota } from "../hooks/useAnalysisQuota";
 import { useCreateAnalysis } from "../hooks/useCreateAnalysis";
 import { useTeamMembers } from "../hooks/useTeamMembers";
 import type { Objective } from "../types/analysis";
@@ -13,7 +15,7 @@ import { ApiError } from "../api/client";
 
 export default function NewAnalysisPage() {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { hasRole, isLoading: authLoading } = useAuth();
   const isGestor = hasRole("GESTOR");
   const createAnalysis = useCreateAnalysis();
   const team = useTeamMembers();
@@ -23,6 +25,10 @@ export default function NewAnalysisPage() {
   const [objectiveComplement, setObjectiveComplement] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("");
   const [ownerId, setOwnerId] = useState("");
+  const quota = useAnalysisQuota(
+    isGestor ? ownerId || undefined : undefined,
+    !authLoading && (!isGestor || !!ownerId),
+  );
   const [inputChoice, setInputChoice] = useState<InputTypeChoice>("texto");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -184,7 +190,11 @@ export default function NewAnalysisPage() {
         </div>
 
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 6 }}>
-          <button type="submit" className="btn btn-primary" disabled={createAnalysis.isPending}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={createAnalysis.isPending || quota.data?.remaining === 0}
+          >
             {createAnalysis.isPending ? "Enviando..." : "Iniciar análise"}
             <Icon name="arrow_forward" size={20} />
           </button>
@@ -205,6 +215,27 @@ export default function NewAnalysisPage() {
             </b>
           </p>
         </div>
+        {quota.data && (
+          <div className="card">
+            <span className="kpi-label">Cota diária de análises</span>
+            {quota.data.exempt ? (
+              <p style={{ fontSize: 13, marginTop: 10 }}>Sem limite diário (administrador).</p>
+            ) : (
+              <>
+                <p style={{ fontSize: 13, marginTop: 10 }}>
+                  {quota.data.used} de {quota.data.limit} usadas hoje
+                </p>
+                <ProgressBar percent={(quota.data.used / quota.data.limit) * 100} />
+                {quota.data.remaining === 0 && (
+                  <p className="error-text" style={{ marginTop: 8 }}>
+                    <Icon name="error" size={16} />
+                    Limite diário atingido para este colaborador.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
         <div className="card">
           <span className="kpi-label">Depois do envio</span>
           <p className="page-subtitle" style={{ fontSize: 13, lineHeight: 1.6, marginTop: 10 }}>

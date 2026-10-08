@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis, AnalysisStatus
@@ -51,6 +52,17 @@ class AnalysisRepository:
 
     def update_status(self, analysis_id: uuid.UUID, status: AnalysisStatus, **extra: Any) -> Analysis:
         return self.update(analysis_id, status=status, **extra)
+
+    def count_today(self, *, owner_id: uuid.UUID, since: datetime) -> int:
+        """Conta análises criadas hoje para este owner, qualquer status (inclusive
+        FAILED — não há devolução de vaga na cota diária). Base do limite diário por
+        colaborador."""
+        stmt = (
+            select(func.count())
+            .select_from(Analysis)
+            .where(Analysis.owner_id == owner_id, Analysis.created_at >= since)
+        )
+        return self.db.execute(stmt).scalar_one()
 
     def delete(self, analysis_id: uuid.UUID) -> None:
         analysis = self.get(analysis_id)

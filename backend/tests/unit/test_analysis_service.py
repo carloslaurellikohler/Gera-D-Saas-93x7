@@ -13,7 +13,7 @@ from app.models.methodology import Methodology, MethodologyStatus
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.user_repository import UserRepository
-from app.services.analysis_service import AnalysisService
+from app.services.analysis_service import AnalysisService, DailyAnalysisLimitError
 from app.storage.local_storage import LocalDiskStorage
 
 
@@ -326,3 +326,186 @@ def test_create_and_store_with_explicit_owner_sets_owner_and_created_by(
     assert analysis.created_by_id == gestor.id
     assert analysis.cs_id == str(current_user.id)
     assert analysis.cs_name == current_user.name
+
+
+def _service_with_limit(db_session, storage, limit: int) -> AnalysisService:
+    settings = Settings(
+        DEFAULT_CS_ID="cs-1", DEFAULT_CS_NAME="Consultor Teste", MAX_UPLOAD_MB=100,
+        DAILY_ANALYSIS_LIMIT_PER_OWNER=limit,
+    )
+    repo = AnalysisRepository(db_session)
+    engine = MagicMock()
+    engine.methodology_id = _seed_methodology(db_session).id
+    return AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
+
+
+def test_create_and_store_raises_when_daily_quota_reached(storage, db_session, tmp_path, current_user):
+    service = _service_with_limit(db_session, storage, limit=2)
+
+    _create_uploaded_analysis(service, storage, current_user, tmp_path)
+    _create_uploaded_analysis(service, storage, current_user, tmp_path)
+
+    with pytest.raises(DailyAnalysisLimitError):
+        _create_uploaded_analysis(service, storage, current_user, tmp_path)
+
+
+def test_create_and_store_counts_failed_analyses_against_quota(storage, db_session, tmp_path, current_user):
+    service = _service_with_limit(db_session, storage, limit=1)
+
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
+    service.repo.update_status(analysis.id, AnalysisStatus.FAILED)
+
+    with pytest.raises(DailyAnalysisLimitError):
+        _create_uploaded_analysis(service, storage, current_user, tmp_path)
+
+
+def test_create_and_store_quota_is_scoped_to_owner(storage, db_session, tmp_path):
+    service = _service_with_limit(db_session, storage, limit=1)
+    user_repo = UserRepository(db_session)
+    gestor = user_repo.create(
+        User(
+            name="Gestora Quota",
+            email="gestora-quota-scope@example.com",
+            password_hash="hash",
+            role=UserRole.GESTOR,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    colaborador_a = user_repo.create(
+        User(
+            name="Colaborador A",
+            email="col-a-quota-scope@example.com",
+            password_hash="hash",
+            role=UserRole.COLABORADOR,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    colaborador_b = user_repo.create(
+        User(
+            name="Colaborador B",
+            email="col-b-quota-scope@example.com",
+            password_hash="hash",
+            role=UserRole.COLABORADOR,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    content = b"CS: Oi\nPB: Oi"
+
+    def _upload(owner: User, suffix: str):
+        return service.create_and_store(
+            current_user=gestor,
+            owner=owner,
+            participant_name="Participante",
+            objective="Onboarding",
+            objective_complement=None,
+            duration_minutes=None,
+            interaction_date=None,
+            file_name=suffix,
+            temp_file_path=_write_temp_upload(tmp_path, suffix, content),
+            file_size_bytes=len(content),
+            file_header=content[:4096],
+        )
+
+    _upload(colaborador_a, "a1.txt")
+    with pytest.raises(DailyAnalysisLimitError):
+        _upload(colaborador_a, "a2.txt")
+
+    # colaborador_b tem cota independente de colaborador_a.
+    analysis_b = _upload(colaborador_b, "b1.txt")
+    assert analysis_b.owner_id == colaborador_b.id
+
+
+def test_admin_exempt_from_quota_when_owner_is_self(storage, db_session, tmp_path):
+    service = _service_with_limit(db_session, storage, limit=1)
+    admin = UserRepository(db_session).create(
+        User(
+            name="Admin Quota",
+            email="admin-quota@example.com",
+            password_hash="hash",
+            role=UserRole.ADMIN,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    content = b"CS: Oi\nPB: Oi"
+
+    analysis = None
+    for i in range(3):
+        suffix = f"admin-{i}.txt"
+        analysis = service.create_and_store(
+            current_user=admin,
+            participant_name="Admin",
+            objective="Onboarding",
+            objective_complement=None,
+            duration_minutes=None,
+            interaction_date=None,
+            file_name=suffix,
+            temp_file_path=_write_temp_upload(tmp_path, suffix, content),
+            file_size_bytes=len(content),
+            file_header=content[:4096],
+        )
+
+    assert analysis is not None
+    assert analysis.owner_id == admin.id
+
+
+def test_gestor_not_exempt_from_quota_when_owner_is_self(storage, db_session, tmp_path):
+    service = _service_with_limit(db_session, storage, limit=1)
+    gestor = UserRepository(db_session).create(
+        User(
+            name="Gestora Self",
+            email="gestora-self-quota@example.com",
+            password_hash="hash",
+            role=UserRole.GESTOR,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    content = b"CS: Oi\nPB: Oi"
+
+    def _upload(suffix: str):
+        return service.create_and_store(
+            current_user=gestor,
+            participant_name="Gestora",
+            objective="Onboarding",
+            objective_complement=None,
+            duration_minutes=None,
+            interaction_date=None,
+            file_name=suffix,
+            temp_file_path=_write_temp_upload(tmp_path, suffix, content),
+            file_size_bytes=len(content),
+            file_header=content[:4096],
+        )
+
+    _upload("g1.txt")
+    with pytest.raises(DailyAnalysisLimitError):
+        _upload("g2.txt")
+
+
+def test_quota_check_happens_before_file_validation(storage, db_session, tmp_path, current_user):
+    service = _service_with_limit(db_session, storage, limit=1)
+    _create_uploaded_analysis(service, storage, current_user, tmp_path)
+
+    invalid_content = b"not a real file"
+    with pytest.raises(DailyAnalysisLimitError):
+        service.create_and_store(
+            current_user=current_user,
+            participant_name="João",
+            objective="Onboarding",
+            objective_complement=None,
+            duration_minutes=None,
+            interaction_date=None,
+            file_name="invalido.xyz",
+            temp_file_path=_write_temp_upload(tmp_path, "invalido.xyz", invalid_content),
+            file_size_bytes=len(invalid_content),
+            file_header=invalid_content[:4096],
+        )
+
+
+def test_get_daily_quota_reflects_used_and_remaining(service: AnalysisService, storage, tmp_path, current_user):
+    _create_uploaded_analysis(service, storage, current_user, tmp_path)
+
+    quota = service.get_daily_quota(target_owner=current_user, current_user=current_user)
+
+    assert quota.used == 1
+    assert quota.limit == service.settings.DAILY_ANALYSIS_LIMIT_PER_OWNER
+    assert quota.remaining == quota.limit - 1
+    assert quota.exempt is False

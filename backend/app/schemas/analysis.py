@@ -52,6 +52,14 @@ class AnalysisStatusResponse(BaseModel):
     updated_at: datetime | None
 
 
+class AnalysisQuotaResponse(BaseModel):
+    owner_id: uuid.UUID
+    used: int
+    limit: int
+    remaining: int
+    exempt: bool
+
+
 class AnalysisTranscriptionResponse(BaseModel):
     id: uuid.UUID
     transcription: dict[str, Any]

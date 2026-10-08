@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from app.api.deps import get_analysis_service
+from app.main import app
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.methodology import Calibrator, FarolColor, Methodology, MethodologyStatus
 from app.models.user import UserRole
@@ -350,3 +352,75 @@ def test_gestor_list_analyses_retorna_so_a_equipe(client_factory):
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["participant_name"] == "Ana"
+
+
+def test_create_analysis_returns_429_when_daily_quota_reached(client, api_service_low_quota):
+    app.dependency_overrides[get_analysis_service] = lambda: api_service_low_quota
+
+    _create_analysis(client, participant_name="Ana")
+    _create_analysis(client, participant_name="Bruno")
+    response = _create_analysis(client, participant_name="Carla")
+
+    assert response.status_code == 429
+
+
+def test_quota_endpoint_returns_used_and_remaining_for_self(client):
+    response = client.get("/api/v1/analyses/quota")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["used"] == 0
+    assert body["remaining"] == body["limit"]
+
+    _create_analysis(client)
+
+    response = client.get("/api/v1/analyses/quota")
+    body = response.json()
+    assert body["used"] == 1
+    assert body["remaining"] == body["limit"] - 1
+    assert body["exempt"] is False
+
+
+def test_quota_endpoint_scoped_to_owner_for_gestor(client_factory):
+    gestor_client, gestor = client_factory(role=UserRole.GESTOR)
+    _, colaborador_a = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+    _, colaborador_b = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+
+    _create_analysis(gestor_client, owner_id=str(colaborador_a.id))
+
+    response_a = gestor_client.get("/api/v1/analyses/quota", params={"owner_id": str(colaborador_a.id)})
+    response_b = gestor_client.get("/api/v1/analyses/quota", params={"owner_id": str(colaborador_b.id)})
+
+    assert response_a.json()["used"] == 1
+    assert response_b.json()["used"] == 0
+
+
+def test_quota_endpoint_404_for_gestor_outside_team(client_factory):
+    gestor_client, _ = client_factory(role=UserRole.GESTOR)
+    _, outsider = client_factory(role=UserRole.COLABORADOR)
+
+    response = gestor_client.get("/api/v1/analyses/quota", params={"owner_id": str(outsider.id)})
+
+    assert response.status_code == 404
+
+
+def test_quota_endpoint_404_for_colaborador_querying_others(client_factory):
+    colaborador_client, _ = client_factory(role=UserRole.COLABORADOR)
+    _, other = client_factory(role=UserRole.COLABORADOR)
+
+    response = colaborador_client.get("/api/v1/analyses/quota", params={"owner_id": str(other.id)})
+
+    assert response.status_code == 404
+
+
+def test_quota_endpoint_admin_is_exempt(admin_client):
+    _create_analysis(admin_client)
+
+    response = admin_client.get("/api/v1/analyses/quota")
+
+    assert response.status_code == 200
+    assert response.json()["exempt"] is True
+
+
+def test_quota_endpoint_requires_authentication(unauthenticated_client):
+    response = unauthenticated_client.get("/api/v1/analyses/quota")
+    assert response.status_code == 401

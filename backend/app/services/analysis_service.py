@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import tempfile
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from app.core.config import Settings
 from app.engine_integration.adapter import EngineAdapter
 from app.engine_integration.mappers import build_input_metadata, slugify
 from app.models.analysis import Analysis, AnalysisStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.repositories.analysis_repository import AnalysisRepository
 from app.services.validation import sanitize_filename, validate_upload_streamed
 from app.storage.base import FileStorage
@@ -35,6 +36,24 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class DailyAnalysisLimitError(ValueError):
+    def __init__(self) -> None:
+        super().__init__(
+            "O limite de análises de hoje para este colaborador foi atingido. Volte amanhã."
+        )
+
+
+@dataclass(frozen=True)
+class DailyQuota:
+    used: int
+    limit: int
+    exempt: bool
+
+    @property
+    def remaining(self) -> int:
+        return self.limit if self.exempt else max(0, self.limit - self.used)
+
+
 class AnalysisService:
     def __init__(
         self,
@@ -47,6 +66,14 @@ class AnalysisService:
         self.storage = storage
         self.engine = engine
         self.settings = settings
+
+    def get_daily_quota(self, *, target_owner: User, current_user: User) -> DailyQuota:
+        # ADMIN é isento só quando sobe para si mesmo — GESTOR nunca é isento (o limite é
+        # do colaborador avaliado, não de quem faz upload).
+        exempt = target_owner.id == current_user.id and current_user.role == UserRole.ADMIN
+        start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        used = self.repo.count_today(owner_id=target_owner.id, since=start_of_day)
+        return DailyQuota(used=used, limit=self.settings.DAILY_ANALYSIS_LIMIT_PER_OWNER, exempt=exempt)
 
     def create_and_store(
         self,
@@ -68,6 +95,9 @@ class AnalysisService:
         # são a mesma pessoa. Para um GESTOR subindo em nome de alguém da equipe,
         # owner é validado contra a equipe na rota antes de chegar aqui.
         target_owner = owner or current_user
+        quota = self.get_daily_quota(target_owner=target_owner, current_user=current_user)
+        if not quota.exempt and quota.used >= quota.limit:
+            raise DailyAnalysisLimitError()
         input_type = validate_upload_streamed(
             file_name=file_name,
             size_bytes=file_size_bytes,

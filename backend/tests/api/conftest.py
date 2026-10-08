@@ -53,6 +53,25 @@ def api_service(db_session, tmp_path: Path) -> AnalysisService:
 
 
 @pytest.fixture()
+def api_service_low_quota(db_session, tmp_path: Path) -> AnalysisService:
+    """Mesmo setup de `api_service`, mas com DAILY_ANALYSIS_LIMIT_PER_OWNER baixo — para
+    testar o 429 sem precisar criar o limite default (4) de análises reais por teste."""
+    storage_dir = tmp_path / "storage_low_quota"
+    settings = Settings(
+        DEFAULT_CS_ID="cs-1",
+        DEFAULT_CS_NAME="Consultor Teste",
+        MAX_UPLOAD_MB=100,
+        STORAGE_DIR=str(storage_dir),
+        DAILY_ANALYSIS_LIMIT_PER_OWNER=2,
+    )
+    storage = LocalDiskStorage(storage_dir)
+    engine = MagicMock()
+    return AnalysisService(
+        repo=AnalysisRepository(db_session), storage=storage, engine=engine, settings=settings
+    )
+
+
+@pytest.fixture()
 def content_service(db_session, tmp_path: Path) -> ContentService:
     storage = LocalDiskStorage(tmp_path / "content_storage")
     return ContentService(repo=ContentRepository(db_session), storage=storage, max_upload_mb=10)

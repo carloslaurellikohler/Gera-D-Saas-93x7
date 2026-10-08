@@ -17,13 +17,14 @@ from app.repositories.methodology_repository import MethodologyRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.analysis import (
     AnalysisListItem,
+    AnalysisQuotaResponse,
     AnalysisResponse,
     AnalysisResultResponse,
     AnalysisStatusResponse,
     AnalysisTranscriptionResponse,
 )
 from app.schemas.common import PaginatedResponse
-from app.services.analysis_service import AnalysisService
+from app.services.analysis_service import AnalysisService, DailyAnalysisLimitError
 from app.services.upload_streaming import buffer_upload
 from app.services.validation import CorruptedFileError, FileTooLargeError, UnsupportedFileTypeError
 from app.workers.tasks import process_analysis_task
@@ -105,6 +106,8 @@ def create_analysis(
                 file_size_bytes=streamed.size_bytes,
                 file_header=streamed.header,
             )
+    except DailyAnalysisLimitError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except (UnsupportedFileTypeError, FileTooLargeError, CorruptedFileError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -125,6 +128,46 @@ def list_analyses(
     owner_ids = _owner_scope(current_user, db)
     items = service.repo.list(status=status, owner_ids=owner_ids, offset=offset, limit=page_size)
     return PaginatedResponse(items=items, total=len(items), page=page, page_size=page_size)
+
+
+def _resolve_quota_target(
+    current_user: User, owner_id: uuid.UUID | None, db: Session
+) -> User:
+    """Autoriza e resolve o owner cuja cota será consultada: COLABORADOR só pode
+    consultar a si mesmo, GESTOR só um subordinado da própria equipe, ADMIN qualquer
+    usuário. Não reaproveita a validação de create_analysis — lá owner_id de quem não é
+    GESTOR é simplesmente ignorado, comportamento que não deve mudar."""
+    if owner_id is None or owner_id == current_user.id:
+        return current_user
+    if current_user.role == UserRole.GESTOR:
+        subordinates = {u.id: u for u in UserRepository(db).list_subordinates(current_user.id)}
+        if owner_id not in subordinates:
+            raise HTTPException(status_code=404, detail="Colaborador não encontrado na sua equipe.")
+        return subordinates[owner_id]
+    if current_user.role == UserRole.ADMIN:
+        target = UserRepository(db).get(owner_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+        return target
+    raise HTTPException(status_code=404, detail="Colaborador não encontrado na sua equipe.")
+
+
+@router.get("/quota", response_model=AnalysisQuotaResponse)
+def get_quota(
+    owner_id: uuid.UUID | None = Query(None),
+    service: AnalysisService = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    target_owner = _resolve_quota_target(current_user, owner_id, db)
+    quota = service.get_daily_quota(target_owner=target_owner, current_user=current_user)
+    return AnalysisQuotaResponse(
+        owner_id=target_owner.id,
+        used=quota.used,
+        limit=quota.limit,
+        remaining=quota.remaining,
+        exempt=quota.exempt,
+    )
 
 
 @router.get("/{analysis_id}", response_model=AnalysisResponse)
