@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    ai_costs,
     analyses,
     assistant,
     auth,
@@ -30,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(ai_costs.router, prefix=settings.API_V1_PREFIX)
 app.include_router(analyses.router, prefix=settings.API_V1_PREFIX)
 app.include_router(assistant.router, prefix=settings.API_V1_PREFIX)
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)

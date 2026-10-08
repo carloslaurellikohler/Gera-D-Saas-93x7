@@ -42,12 +42,36 @@ def _seed_methodology(db_session) -> Methodology:
     return methodology
 
 
+class FakeUsageSink:
+    """Sink de contabilização de custo em memória. Injetado explicitamente para que teste
+    nunca escreva em ai_usage_events do banco de desenvolvimento (o sink padrão usa
+    SessionLocal, que aponta para o banco real, não para gerad_test)."""
+
+    def __init__(self) -> None:
+        self.events: list = []
+
+    def flush(self, events: list) -> None:
+        self.events.extend(events)
+
+
+class ExplodingUsageSink:
+    def flush(self, events: list) -> None:  # noqa: ARG002
+        raise RuntimeError("banco de custo indisponivel")
+
+
 @pytest.fixture()
-def service(db_session, storage, settings) -> AnalysisService:
+def usage_sink() -> FakeUsageSink:
+    return FakeUsageSink()
+
+
+@pytest.fixture()
+def service(db_session, storage, settings, usage_sink) -> AnalysisService:
     repo = AnalysisRepository(db_session)
     engine = MagicMock()
     engine.methodology_id = _seed_methodology(db_session).id
-    return AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
+    return AnalysisService(
+        repo=repo, storage=storage, engine=engine, settings=settings, usage_sink=usage_sink
+    )
 
 
 @pytest.fixture()
@@ -70,9 +94,18 @@ def _write_temp_upload(tmp_path: Path, name: str, content: bytes) -> Path:
 
 
 def _create_uploaded_analysis(
-    service: AnalysisService, storage: LocalDiskStorage, current_user: User, tmp_path: Path
+    service: AnalysisService,
+    storage: LocalDiskStorage,
+    current_user: User,
+    tmp_path: Path,
+    *,
+    file_name: str = "transcricao.txt",
+    content: bytes | None = None,
 ):
-    content = b"CS: Oi\nPB: Oi"
+    # Default é entrada de texto. Os testes de custo de transcrição passam um .mp3 com
+    # cabeçalho ID3 real, porque validate_upload_streamed checa a assinatura do arquivo.
+    if content is None:
+        content = b"ID3\x04\x00\x00\x00\x00\x00\x23" + b"\x00" * 100 if file_name.endswith(".mp3") else b"CS: Oi\nPB: Oi"
     analysis = service.create_and_store(
         current_user=current_user,
         participant_name="João Silva",
@@ -80,8 +113,8 @@ def _create_uploaded_analysis(
         objective_complement=None,
         duration_minutes=45,
         interaction_date=None,
-        file_name="transcricao.txt",
-        temp_file_path=_write_temp_upload(tmp_path, "transcricao.txt", content),
+        file_name=file_name,
+        temp_file_path=_write_temp_upload(tmp_path, file_name, content),
         file_size_bytes=len(content),
         file_header=content[:4096],
     )
@@ -509,3 +542,148 @@ def test_get_daily_quota_reflects_used_and_remaining(service: AnalysisService, s
     assert quota.limit == service.settings.DAILY_ANALYSIS_LIMIT_PER_OWNER
     assert quota.remaining == quota.limit - 1
     assert quota.exempt is False
+
+
+# --- FinAI: contabilização de custo de IA ---
+
+
+def test_entrada_de_texto_nao_gera_evento_de_transcricao(
+    service: AnalysisService, storage, tmp_path, current_user, usage_sink
+):
+    """`.docx`/`.txt` são lidos localmente pelo docx_loader: não chamam Whisper e não custam
+    nada. Registrar um evento aqui inflaria a fatura."""
+    analysis = _create_uploaded_analysis(service, storage, current_user, tmp_path)
+    result, export_reports_fn = _fake_result(tmp_path)
+    service.engine.load_transcript.return_value = _fake_transcript()
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id)
+
+    assert usage_sink.events == []
+
+
+def test_entrada_de_audio_gera_evento_de_transcricao_com_duracao(
+    service: AnalysisService, storage, tmp_path, current_user, usage_sink, monkeypatch
+):
+    import subprocess
+    from decimal import Decimal
+
+    from app.models.ai_cost import AiUsageFeature, AiUsageOperation
+
+    monkeypatch.setattr(
+        subprocess, "run", MagicMock(return_value=MagicMock(stdout=b"600.000000\n"))
+    )
+    analysis = _create_uploaded_analysis(
+        service, storage, current_user, tmp_path, file_name="chamada.mp3"
+    )
+    result, export_reports_fn = _fake_result(tmp_path)
+    service.engine.load_transcript.return_value = _fake_transcript()
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id)
+
+    eventos = [e for e in usage_sink.events if e.operation is AiUsageOperation.TRANSCRIPTION]
+    assert len(eventos) == 1
+    evento = eventos[0]
+    assert evento.model == "whisper-1"
+    assert evento.audio_seconds == Decimal("600.000000")
+    assert evento.feature is AiUsageFeature.ANALYSIS
+    assert evento.analysis_id == analysis.id
+    assert evento.user_id == current_user.id
+    assert evento.calls == 1
+
+
+def test_ffprobe_indisponivel_nao_impede_a_analise(
+    service: AnalysisService, storage, tmp_path, current_user, usage_sink, monkeypatch
+):
+    """Sem duração medida o evento fica sem unidades (cost_status=NO_UNITS no sink real),
+    mas a análise conclui normalmente."""
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", MagicMock(side_effect=FileNotFoundError("ffprobe")))
+    analysis = _create_uploaded_analysis(
+        service, storage, current_user, tmp_path, file_name="chamada.mp3"
+    )
+    result, export_reports_fn = _fake_result(tmp_path)
+    service.engine.load_transcript.return_value = _fake_transcript()
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id)
+
+    assert service.repo.get(analysis.id).status == AnalysisStatus.COMPLETED
+    assert usage_sink.events[0].audio_seconds is None
+
+
+def test_attempt_do_celery_e_propagado_para_os_eventos(
+    service: AnalysisService, storage, tmp_path, current_user, usage_sink, monkeypatch
+):
+    """É o que torna visível o custo de retentativa."""
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", MagicMock(return_value=MagicMock(stdout=b"60.0\n")))
+    analysis = _create_uploaded_analysis(
+        service, storage, current_user, tmp_path, file_name="chamada.mp3"
+    )
+    result, export_reports_fn = _fake_result(tmp_path)
+    service.engine.load_transcript.return_value = _fake_transcript()
+    service.engine.run_pipeline.return_value = result
+    service.engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id, attempt=2)
+
+    assert usage_sink.events[0].attempt == 2
+
+
+def test_falha_ao_contabilizar_custo_nao_reprova_a_analise(
+    db_session, storage, settings, tmp_path, current_user, monkeypatch
+):
+    """INVARIANTE da feature: contabilizar custo NUNCA falha uma análise."""
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", MagicMock(return_value=MagicMock(stdout=b"60.0\n")))
+    engine = MagicMock()
+    engine.methodology_id = _seed_methodology(db_session).id
+    service = AnalysisService(
+        repo=AnalysisRepository(db_session),
+        storage=storage,
+        engine=engine,
+        settings=settings,
+        usage_sink=ExplodingUsageSink(),
+    )
+    analysis = _create_uploaded_analysis(
+        service, storage, current_user, tmp_path, file_name="chamada.mp3"
+    )
+    result, export_reports_fn = _fake_result(tmp_path)
+    engine.load_transcript.return_value = _fake_transcript()
+    engine.run_pipeline.return_value = result
+    engine.export_reports.side_effect = export_reports_fn
+
+    service.run_analysis_job(analysis.id)
+
+    assert service.repo.get(analysis.id).status == AnalysisStatus.COMPLETED
+
+
+def test_pipeline_que_falha_ainda_contabiliza_o_que_ja_queimou(
+    service: AnalysisService, storage, tmp_path, current_user, usage_sink, monkeypatch
+):
+    """O flush acontece no finally: tokens já gastos numa análise que falhou são justamente
+    o número que o dono da ferramenta precisa ver."""
+    import subprocess
+
+    from app.models.ai_cost import AiUsageOperation
+
+    monkeypatch.setattr(subprocess, "run", MagicMock(return_value=MagicMock(stdout=b"300.0\n")))
+    analysis = _create_uploaded_analysis(
+        service, storage, current_user, tmp_path, file_name="chamada.mp3"
+    )
+    service.engine.load_transcript.return_value = _fake_transcript()
+    service.engine.run_pipeline.side_effect = RuntimeError("estourou o contexto do modelo")
+
+    with pytest.raises(RuntimeError):
+        service.run_analysis_job(analysis.id)
+
+    assert service.repo.get(analysis.id).status == AnalysisStatus.FAILED
+    assert [e.operation for e in usage_sink.events] == [AiUsageOperation.TRANSCRIPTION]

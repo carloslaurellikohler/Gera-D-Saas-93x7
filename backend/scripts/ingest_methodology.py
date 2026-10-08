@@ -15,8 +15,11 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+from app.ai_cost import PendingUsage, count_tokens_batch, track_ai_usage
+from app.ai_cost.stages import STAGE_CORPUS_EMBEDDING
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.models.ai_cost import AiUsageFeature, AiUsageOperation
 from app.models.methodology_chunk import MethodologyChunk
 from app.repositories.methodology_chunk_repository import MethodologyChunkRepository
 from app.services.assistant_llm import build_embedding_model
@@ -65,7 +68,25 @@ def main() -> None:
         return
 
     embedding_model = build_embedding_model(settings)
-    vectors = embedding_model.embed_documents(chunks)
+    # Reindexar o corpus é uma chamada de embedding em lote, e sem contabilizá-la o painel
+    # de custo mentiria sempre que alguém rodasse este script. user_id fica nulo: é uma
+    # execução de manutenção, não de um usuário da plataforma.
+    with track_ai_usage(feature=AiUsageFeature.INGESTION) as usage:
+        vectors = embedding_model.embed_documents(chunks)
+        usage.add(
+            PendingUsage(
+                feature=AiUsageFeature.INGESTION,
+                operation=AiUsageOperation.EMBEDDING,
+                model=settings.ASSISTANT_EMBEDDING_MODEL,
+                stage=STAGE_CORPUS_EMBEDDING,
+                input_tokens=count_tokens_batch(
+                    chunks, model=settings.ASSISTANT_EMBEDDING_MODEL
+                )
+                or 0,
+                calls=1,
+                tokens_estimated=True,
+            )
+        )
 
     db = SessionLocal()
     try:

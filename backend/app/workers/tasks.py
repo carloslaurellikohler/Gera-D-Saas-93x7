@@ -35,7 +35,10 @@ def process_analysis_task(self, analysis_id: str) -> None:
     db = SessionLocal()
     try:
         service = _build_analysis_service(db)
-        service.run_analysis_job(uuid.UUID(analysis_id))
+        # self.request.retries é 0 na primeira execução e 1/2 nas retentativas. Repassar
+        # isso é o que faz o custo de retentativa aparecer na tela do FinAI: uma falha
+        # transitória tardia reexecuta o pipeline inteiro e reemite todas as chamadas.
+        service.run_analysis_job(uuid.UUID(analysis_id), attempt=self.request.retries or 0)
     except _TRANSIENT_ERRORS as exc:
         log.warning("transient engine error for analysis %s, retrying: %s", analysis_id, exc)
         raise self.retry(exc=exc)

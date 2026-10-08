@@ -141,6 +141,27 @@ não são aceitos — limitação da engine, comunicada como erro 4xx claro, nun
   endpoints reais de `/methodology`, com fluxo de criar rascunho (a partir de uma versão
   existente), editar e publicar.
 
+- **Fase 8 — FinAI: observabilidade de custo de IA** — tabelas `AiUsageEvent` (uma linha por
+  chamada à OpenAI), `AiModelPrice` (preço por modelo/operação, versionado por `valid_from`),
+  `AiCostBudget` (meta mensal) e `AiCostSettings` (linha única: limiar de alerta + cotação
+  manual do dólar). Antes disso, o custo de IA só existia no console da OpenAI, sem
+  atribuição a usuário, sem tokens e sem dólares.
+  A captura acontece em `backend/app/ai_cost/`, **sem tocar a engine**: o hook de ContextVar
+  do LangChain (`register_configure_hook`) faz com que as 6-7 chamadas de chat que acontecem
+  dentro de `gera_d_engine` sejam capturadas por um `BaseCallbackHandler` nosso. A etapa de
+  cada chamada sai determinística do nome da classe pydantic de `with_structured_output`
+  (`app/ai_cost/stages.py`, travado por `tests/contract/test_ai_cost_stage_map.py`). Whisper
+  não passa por LangChain: a duração vem de `ffprobe` e o custo é por minuto. Embeddings não
+  emitem callback: os tokens são contados com `tiktoken` (`tokens_estimated=True`).
+  Rotas `GET /ai-costs/summary|events`, `GET/POST/PUT /ai-costs/prices`,
+  `POST /ai-costs/prices/{id}/recalculate` e `GET/PUT /ai-costs/config`, todas restritas a
+  ADMIN (403, não o 404 do padrão dono-ou-ADMIN — não há ID de outro usuário a proteger num
+  agregado global). Tela `/custos-ia` (`AiCostPage`, abas Visão geral / Chamadas / Preços e
+  orçamento) com KPIs, série empilhada por origem, donut por operação, custo por etapa do
+  pipeline, ranking por usuário (com gestor) e análises mais caras.
+  O orçamento mensal **apenas avisa** — os freios efetivos continuam sendo
+  `DAILY_ANALYSIS_LIMIT_PER_OWNER` e `ASSISTANT_DAILY_MESSAGE_LIMIT`.
+
 ## Roadmap das fases seguintes
 
 Cada fase deve começar com uma nova rodada de exploração + planejamento antes de ser
@@ -179,6 +200,25 @@ Foi produzido um prompt detalhado para o Claude Design cobrindo:
 - Nota geral de uma análise vem do julgamento holístico das etapas de IA, nunca de uma
   fórmula aritmética simples sobre os pilares — por isso as tabelas de metodologia (Fase 7)
   não têm campo de peso numérico por critério.
+- **FinAI (Fase 8) — quatro decisões que não devem ser reabertas:**
+  1. A captura de tokens usa o hook de ContextVar do LangChain, registrado **uma única vez no
+     import** de `app/ai_cost/callback.py`. Nunca trocar por `get_usage_metadata_callback()`
+     do langchain: ele chama `register_configure_hook` a cada invocação, que faz `append`
+     numa lista global sem dedup — num worker Celery de vida longa isso vaza uma entrada por
+     análise. Há teste de regressão para isso.
+  2. `cost_usd` é `Numeric(18, 10)` e é um **snapshot congelado** na gravação. Escala menor
+     zeraria custo de embedding (10 tokens a US$ 0,02/milhão = US$ 0,0000002), e recalcular
+     por join na leitura faria mudança de preço da OpenAI reescrever meses já fechados.
+     Reescrever histórico é ação humana explícita (`POST /ai-costs/prices/{id}/recalculate`).
+  3. **Sem backfill** de custo histórico. Não existe dado de token anterior à fase, e estimar
+     produziria números indistinguíveis dos medidos numa tela financeira. A UI declara a data
+     de início da contabilização. Mesmo racional de `analyses.methodology_version_id` e
+     `chat_messages.conversation_id`.
+  4. **Contabilizar custo nunca falha uma análise nem uma resposta do assistente.** Sink em
+     sessão própria, flush único no `finally`, try/except em tudo. Preço ausente, ffprobe
+     indisponível ou `usage_metadata` ausente degradam para um evento com `cost_status`
+     explícito (`NO_PRICE`/`NO_UNITS`), que a tela mostra — subcontagem documentada é
+     aceitável, subcontagem invisível não é.
 - Publicar uma nova versão de metodologia em `/calibracao` (Postgres, Fase 7) **não**
   atualiza o corpus do Assistente de IA (Fase 6). O RAG indexa só
   `docs/metodologia_93x7.pdf` via `backend/scripts/ingest_methodology.py`, rodado

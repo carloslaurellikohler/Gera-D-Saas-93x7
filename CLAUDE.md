@@ -171,6 +171,40 @@ Ciclo de vida: DRAFT → PUBLISHED → ARCHIVED, com índice parcial único gara
 `CriterionKey` e que há 4 calibradores cobrindo as 4 cores do farol (senão 409).
 `analyses.methodology_version_id` registra qual versão gerou cada resultado.
 
+### Custo de IA (FinAI, Fase 8)
+
+`backend/app/ai_cost/` captura o consumo de OpenAI **sem tocar a engine**. Pacote próprio (não
+`engine_integration/`) porque dois dos quatro pontos de consumo — assistente e
+`scripts/ingest_methodology.py` — não têm nada a ver com `gera_d_engine`; nenhum arquivo de
+`ai_cost/` importa a engine.
+
+O mecanismo é o hook de ContextVar do LangChain: `register_configure_hook` em
+`ai_cost/callback.py` faz qualquer `invoke()` de chat model dentro do escopo de
+`track_ai_usage(...)` cair num `BaseCallbackHandler` nosso — inclusive as 6-7 chamadas feitas
+lá dentro da engine. **`register_configure_hook` faz `append` numa lista global sem dedup**:
+o registro é único, no import do módulo, e por job só se faz `set()`/`reset()` do ContextVar.
+Nunca substituir por `get_usage_metadata_callback()` do langchain (vaza uma entrada por job e
+perde granularidade por chamada) — há teste de regressão em
+`tests/unit/test_ai_cost_callback.py`.
+
+A etapa de cada chamada vem do nome da classe pydantic de `with_structured_output`
+(`invocation_params["response_format"]`), mapeado em `ai_cost/stages.py` e travado por
+`tests/contract/test_ai_cost_stage_map.py` — se a engine renomear um nó, esse teste quebra em
+vez do painel degradar em silêncio.
+
+Whisper não passa por LangChain (SDK bruto na engine): a duração vem de `ffprobe`
+(`ai_cost/audio.py`) e o custo é por minuto. Embeddings não emitem callback: tokens contados
+com `tiktoken` (`ai_cost/tokenization.py`, `tokens_estimated=True`).
+
+Invariante: **contabilizar custo nunca falha uma análise nem uma resposta do assistente** —
+sink em sessão própria, flush único no `finally`, try/except em tudo. Falha de preço ou de
+medição vira `cost_status=NO_PRICE|NO_UNITS`, nunca exceção. `AI_COST_TRACKING_ENABLED=false`
+desliga a captura inteira.
+
+Custo é `Numeric(18, 10)` e **congelado** na gravação (escala menor zeraria embeddings; o
+snapshot é o que mantém meses fechados imutáveis). Reprecificar histórico é explícito, via
+`POST /ai-costs/prices/{id}/recalculate`.
+
 ### Autorização
 
 JWT em cookie httpOnly (`app/core/security.py`), stateless. `get_current_user` lê o cookie e exige

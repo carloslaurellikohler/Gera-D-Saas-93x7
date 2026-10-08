@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     ASSISTANT_CHUNK_SIZE: int = 1200
     ASSISTANT_CHUNK_OVERLAP: int = 200
 
+    # --- FinAI: observabilidade de custo de IA ---
+    # Preço por modelo, orçamento mensal e taxa USD→BRL NÃO vivem aqui: são editáveis pelo
+    # ADMIN na tela, no banco (ai_model_prices / ai_cost_budgets / ai_cost_settings). Aqui
+    # fica só o que é operacional. AI_COST_TRACKING_ENABLED é kill switch: com false, a
+    # captura é desligada inteira sem precisar reverter código.
+    AI_COST_TRACKING_ENABLED: bool = True
+    AI_COST_FFPROBE_TIMEOUT_SECONDS: int = 60
+
     # Limitador diário de análises por colaborador (owner_id) — controle de custo/fluxo.
     # ADMIN é isento quando sobe para si mesmo; GESTOR nunca é isento (o limite é do
     # colaborador avaliado, não de quem faz upload). Reset à meia-noite UTC.

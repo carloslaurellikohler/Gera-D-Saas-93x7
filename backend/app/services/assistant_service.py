@@ -15,7 +15,11 @@ from datetime import date, datetime, timedelta, timezone
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from app.ai_cost import PendingUsage, count_tokens, track_ai_usage
+from app.ai_cost.recorder import UsageSink
+from app.ai_cost.stages import STAGE_ASSISTANT_CHAT, STAGE_ASSISTANT_QUESTION_EMBEDDING
 from app.core.config import Settings
+from app.models.ai_cost import AiUsageFeature, AiUsageOperation
 from app.models.chat_message import ChatMessage, ChatMessageRole
 from app.models.methodology_chunk import MethodologyChunk
 from app.models.user import User
@@ -60,6 +64,7 @@ class AssistantService:
         settings: Settings,
         chat_model: ChatOpenAI | None = None,
         embedding_model: OpenAIEmbeddings | None = None,
+        usage_sink: UsageSink | None = None,
     ) -> None:
         self.chat_repo = chat_repo
         self.chunk_repo = chunk_repo
@@ -68,6 +73,8 @@ class AssistantService:
         self.settings = settings
         self._chat_model = chat_model
         self._embedding_model = embedding_model
+        # None faz track_ai_usage resolver o sink padrão (respeitando o kill switch).
+        self.usage_sink = usage_sink
 
     @property
     def chat_model(self) -> ChatOpenAI:
@@ -96,16 +103,32 @@ class AssistantService:
             )
         )
 
-        question_embedding = self.embedding_model.embed_query(content)
-        relevant_chunks = self._top_chunks(question_embedding, k=self.settings.ASSISTANT_TOP_K_CHUNKS)
-        personal_context = self._personal_context(user)
-        history = self.chat_repo.list_recent(
-            user_id=user.id, conversation_id=conversation_id, limit=self.settings.ASSISTANT_HISTORY_WINDOW
-        )
+        # Cada mensagem custa exatamente 2 chamadas: 1 embedding da pergunta + 1 chat. O
+        # chat é capturado pelo callback; o embedding precisa de contagem local, porque
+        # OpenAIEmbeddings não é chat model e não emite on_llm_end (ver ai_cost/tokenization.py).
+        with track_ai_usage(
+            feature=AiUsageFeature.ASSISTANT,
+            user_id=user.id,
+            job_run_id=uuid.uuid4(),
+            default_stage=STAGE_ASSISTANT_CHAT,
+            sink=self.usage_sink,
+        ) as usage:
+            question_embedding = self.embedding_model.embed_query(content)
+            usage.add(self._embedding_usage(content))
 
-        prompt_messages = self._build_prompt(relevant_chunks, personal_context, history)
-        answer = self.chat_model.invoke(prompt_messages)
-        answer_text = answer.content if isinstance(answer.content, str) else str(answer.content)
+            relevant_chunks = self._top_chunks(
+                question_embedding, k=self.settings.ASSISTANT_TOP_K_CHUNKS
+            )
+            personal_context = self._personal_context(user)
+            history = self.chat_repo.list_recent(
+                user_id=user.id,
+                conversation_id=conversation_id,
+                limit=self.settings.ASSISTANT_HISTORY_WINDOW,
+            )
+
+            prompt_messages = self._build_prompt(relevant_chunks, personal_context, history)
+            answer = self.chat_model.invoke(prompt_messages)
+            answer_text = answer.content if isinstance(answer.content, str) else str(answer.content)
 
         return self.chat_repo.create(
             ChatMessage(
@@ -114,6 +137,20 @@ class AssistantService:
                 content=answer_text,
                 conversation_id=conversation_id,
             )
+        )
+
+    def _embedding_usage(self, content: str) -> PendingUsage:
+        """Evento do embedding da pergunta. `tokens_estimated=True` porque a contagem é
+        local (tiktoken), não reportada pela API — a tela diz isso."""
+        model = self.settings.ASSISTANT_EMBEDDING_MODEL
+        tokens = count_tokens(content, model=model)
+        return PendingUsage(
+            feature=AiUsageFeature.ASSISTANT,
+            operation=AiUsageOperation.EMBEDDING,
+            model=model,
+            stage=STAGE_ASSISTANT_QUESTION_EMBEDDING,
+            input_tokens=tokens or 0,
+            tokens_estimated=True,
         )
 
     def _check_rate_limit(self, user: User) -> None:

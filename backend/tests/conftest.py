@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.models import ai_cost as _ai_cost_models  # noqa: F401 — registra o modelo em Base.metadata
 from app.models import analysis as _analysis_models  # noqa: F401 — registra o modelo em Base.metadata
 from app.models import chat_message as _chat_message_models  # noqa: F401 — registra o modelo em Base.metadata
 from app.models import content as _content_models  # noqa: F401 — registra o modelo em Base.metadata

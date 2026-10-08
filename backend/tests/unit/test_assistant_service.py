@@ -46,8 +46,30 @@ def fake_embedding_model() -> MagicMock:
     return model
 
 
+class FakeUsageSink:
+    """Sink de contabilização em memória. Injetado explicitamente para que teste nunca
+    escreva em ai_usage_events do banco de desenvolvimento (o sink padrão usa SessionLocal,
+    que aponta para o banco real, não para gerad_test)."""
+
+    def __init__(self) -> None:
+        self.events: list = []
+
+    def flush(self, events: list) -> None:
+        self.events.extend(events)
+
+
+class ExplodingUsageSink:
+    def flush(self, events: list) -> None:  # noqa: ARG002
+        raise RuntimeError("banco de custo indisponivel")
+
+
 @pytest.fixture()
-def service(db_session, fake_chat_model, fake_embedding_model) -> AssistantService:
+def usage_sink() -> FakeUsageSink:
+    return FakeUsageSink()
+
+
+@pytest.fixture()
+def service(db_session, fake_chat_model, fake_embedding_model, usage_sink) -> AssistantService:
     return AssistantService(
         chat_repo=ChatMessageRepository(db_session),
         chunk_repo=MethodologyChunkRepository(db_session),
@@ -56,6 +78,7 @@ def service(db_session, fake_chat_model, fake_embedding_model) -> AssistantServi
         settings=Settings(ASSISTANT_DAILY_MESSAGE_LIMIT=3, ASSISTANT_TOP_K_CHUNKS=1),
         chat_model=fake_chat_model,
         embedding_model=fake_embedding_model,
+        usage_sink=usage_sink,
     )
 
 
@@ -183,3 +206,81 @@ def test_ask_after_new_conversation_does_not_leak_old_topic_into_prompt(
     prompt_messages = fake_chat_model.invoke.call_args.args[0]
     human_contents = [content for role, content in prompt_messages if role == "human"]
     assert human_contents == ["pergunta da conversa nova"]
+
+
+# --- FinAI: contabilização de custo de IA ---
+
+
+def test_ask_contabiliza_embedding_da_pergunta(service, regular_user, usage_sink):
+    """Embedding não é chat model e não emite on_llm_end — a contagem é local (tiktoken),
+    por isso tokens_estimated=True."""
+    from app.models.ai_cost import AiUsageFeature, AiUsageOperation
+
+    service.ask(user=regular_user, content="Como funciona o pilar 93 da metodologia?")
+
+    embeddings = [e for e in usage_sink.events if e.operation is AiUsageOperation.EMBEDDING]
+    assert len(embeddings) == 1
+    evento = embeddings[0]
+    assert evento.feature is AiUsageFeature.ASSISTANT
+    assert evento.stage == "ASSISTANT_QUESTION_EMBEDDING"
+    assert evento.model == "text-embedding-3-small"
+    assert evento.input_tokens > 0
+    assert evento.tokens_estimated is True
+    assert evento.user_id == regular_user.id
+
+
+def test_ask_com_chat_model_langchain_gera_exatamente_dois_eventos(
+    db_session, fake_embedding_model, regular_user, usage_sink
+):
+    """Com um chat model LangChain de verdade (e não MagicMock), o callback captura a
+    chamada de chat: 1 embedding + 1 chat por mensagem."""
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+    from langchain_core.messages import AIMessage
+
+    from app.models.ai_cost import AiUsageOperation
+
+    answer = AIMessage(
+        content="resposta",
+        usage_metadata={"input_tokens": 1500, "output_tokens": 220, "total_tokens": 1720},
+        response_metadata={"model_name": "gpt-6-luna"},
+    )
+    service = AssistantService(
+        chat_repo=ChatMessageRepository(db_session),
+        chunk_repo=MethodologyChunkRepository(db_session),
+        metrics_repo=MetricsRepository(db_session),
+        user_repo=UserRepository(db_session),
+        settings=Settings(ASSISTANT_DAILY_MESSAGE_LIMIT=3, ASSISTANT_TOP_K_CHUNKS=1),
+        chat_model=GenericFakeChatModel(messages=iter([answer])),
+        embedding_model=fake_embedding_model,
+        usage_sink=usage_sink,
+    )
+
+    service.ask(user=regular_user, content="Qual minha nota media?")
+
+    operacoes = sorted(e.operation.value for e in usage_sink.events)
+    assert operacoes == ["CHAT", "EMBEDDING"]
+    chat = next(e for e in usage_sink.events if e.operation is AiUsageOperation.CHAT)
+    assert chat.model == "gpt-6-luna"
+    assert (chat.input_tokens, chat.output_tokens) == (1500, 220)
+    assert chat.stage == "ASSISTANT_CHAT"
+
+
+def test_falha_ao_contabilizar_nao_impede_a_resposta(
+    db_session, fake_chat_model, fake_embedding_model, regular_user
+):
+    """INVARIANTE da feature: contabilizar custo nunca derruba a resposta do assistente."""
+    service = AssistantService(
+        chat_repo=ChatMessageRepository(db_session),
+        chunk_repo=MethodologyChunkRepository(db_session),
+        metrics_repo=MetricsRepository(db_session),
+        user_repo=UserRepository(db_session),
+        settings=Settings(ASSISTANT_DAILY_MESSAGE_LIMIT=3, ASSISTANT_TOP_K_CHUNKS=1),
+        chat_model=fake_chat_model,
+        embedding_model=fake_embedding_model,
+        usage_sink=ExplodingUsageSink(),
+    )
+
+    mensagem = service.ask(user=regular_user, content="pergunta qualquer")
+
+    assert mensagem.content == "resposta do assistente"
+    assert mensagem.role == ChatMessageRole.ASSISTANT

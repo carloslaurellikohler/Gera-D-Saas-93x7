@@ -6,6 +6,43 @@ export function formatDurationSeconds(seconds: number | null): string {
   return `${minutes} min`;
 }
 
+/**
+ * Custo em dólares. Usa 4 casas abaixo de 1 centavo porque o custo de uma única chamada
+ * costuma viver nessa faixa (um embedding de pergunta custa fração de centavo) — com 2
+ * casas a tabela de eventos mostraria "US$ 0,00" em quase toda linha.
+ */
+export function formatUsd(value: number | null): string {
+  if (value === null) return "—";
+  if (value !== 0 && Math.abs(value) < 0.01) {
+    return `US$ ${value.toLocaleString("pt-BR", {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 6,
+    })}`;
+  }
+  return `US$ ${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/**
+ * Equivalente aproximado em reais, só para exibição ao lado do valor em dólar. A taxa é
+ * manual (cadastrada pelo ADMIN) e nenhum valor em BRL é persistido no banco.
+ */
+export function formatBrlFromUsd(usd: number | null, rate: number | null): string | null {
+  if (usd === null || rate === null) return null;
+  return `≈ R$ ${(usd * rate).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export function formatTokens(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return String(value);
+}
+
 export function formatDate(isoString: string | null): string {
   if (!isoString) return "—";
   return new Date(isoString).toLocaleDateString("pt-BR", {

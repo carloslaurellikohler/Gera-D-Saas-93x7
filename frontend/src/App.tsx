@@ -10,6 +10,7 @@ import LibraryPage from "./routes/LibraryPage";
 import LearningPathDetailPage from "./routes/LearningPathDetailPage";
 import AssistantPage from "./routes/AssistantPage";
 import AdminDashboardPage from "./routes/AdminDashboardPage";
+import AiCostPage from "./routes/AiCostPage";
 import CalibrationPage from "./routes/CalibrationPage";
 import UserAdminPage from "./routes/UserAdminPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -121,6 +122,16 @@ function App() {
             <AuthenticatedShell>
               <RequireRole allow={["ADMIN"]}>
                 <UserAdminPage />
+              </RequireRole>
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/custos-ia"
+          element={
+            <AuthenticatedShell>
+              <RequireRole allow={["ADMIN"]}>
+                <AiCostPage />
               </RequireRole>
             </AuthenticatedShell>
           }

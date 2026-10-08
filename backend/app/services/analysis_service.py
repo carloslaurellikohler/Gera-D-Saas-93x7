@@ -8,14 +8,22 @@ import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from gera_d_engine.schemas.analysis import AnalysisResult
 from gera_d_engine.schemas.transcript import Transcript
 
+from app.ai_cost import PendingUsage, WHISPER_MODEL_NAME, probe_duration_seconds, track_ai_usage
+from app.ai_cost.callback import UsageCollector
+from app.ai_cost.constants import TRANSCRIBED_INPUT_TYPES
+from app.ai_cost.recorder import UsageSink
+from app.ai_cost.stages import STAGE_TRANSCRIPTION
 from app.core.config import Settings
 from app.engine_integration.adapter import EngineAdapter
+from app.engine_integration.audio_chunking import whisper_call_count
 from app.engine_integration.mappers import build_input_metadata, slugify
+from app.models.ai_cost import AiUsageFeature, AiUsageOperation
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.user import User, UserRole
 from app.repositories.analysis_repository import AnalysisRepository
@@ -34,6 +42,13 @@ _SAFE_MESSAGES = {
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _safe_whisper_call_count(file_path: Path, duration: Decimal | None) -> int:
+    try:
+        return whisper_call_count(file_path, duration)
+    except Exception:  # noqa: BLE001 — número de diagnóstico nunca derruba uma análise
+        return 1
 
 
 class DailyAnalysisLimitError(ValueError):
@@ -61,11 +76,15 @@ class AnalysisService:
         storage: FileStorage,
         engine: EngineAdapter,
         settings: Settings,
+        usage_sink: UsageSink | None = None,
     ) -> None:
         self.repo = repo
         self.storage = storage
         self.engine = engine
         self.settings = settings
+        # None faz track_ai_usage resolver o sink padrão (respeitando o kill switch
+        # AI_COST_TRACKING_ENABLED). Injetável para teste.
+        self.usage_sink = usage_sink
 
     def get_daily_quota(self, *, target_owner: User, current_user: User) -> DailyQuota:
         # ADMIN é isento só quando sobe para si mesmo — GESTOR nunca é isento (o limite é
@@ -129,37 +148,86 @@ class AnalysisService:
         file_ref = self.storage.save_file(temp_file_path, f"{analysis.id}/{safe_name}")
         return self.repo.update(analysis.id, file_path=file_ref, status=AnalysisStatus.UPLOADED)
 
-    def run_analysis_job(self, analysis_id: uuid.UUID) -> None:
+    def run_analysis_job(self, analysis_id: uuid.UUID, *, attempt: int = 0) -> None:
         analysis = self.repo.get(analysis_id)
         if analysis is None:
             raise ValueError(f"Analysis {analysis_id} not found")
 
         stage = "transcription"
-        try:
-            transcript = self._run_transcription(analysis)
-            stage = "analysis"
-            result = self._run_pipeline(analysis, transcript)
-            stage = "reports"
-            self._run_reports(analysis, result)
-        except Exception:
-            log.exception("analysis %s failed at stage=%s", analysis_id, stage)
-            self.repo.update(
-                analysis_id,
-                status=AnalysisStatus.FAILED,
-                error_message=_SAFE_MESSAGES[stage],
-                completed_at=_utcnow(),
-            )
-            raise
+        # Um único escopo de contabilização para o job inteiro: as 6-7 chamadas de chat que
+        # acontecem lá dentro da engine são capturadas pelo hook de ContextVar (ver
+        # app/ai_cost/callback.py), e tudo é gravado numa única vez no fim — inclusive
+        # quando o pipeline falha no meio, porque os tokens já queimados são justamente o
+        # que o dono da ferramenta precisa ver. `attempt` vem do Celery e torna visível o
+        # custo de retentativa, que hoje reexecuta o pipeline inteiro sem deixar rastro.
+        with track_ai_usage(
+            feature=AiUsageFeature.ANALYSIS,
+            user_id=analysis.owner_id,
+            analysis_id=analysis.id,
+            job_run_id=uuid.uuid4(),
+            attempt=attempt,
+            sink=self.usage_sink,
+        ) as usage:
+            try:
+                transcript = self._run_transcription(analysis, usage)
+                stage = "analysis"
+                result = self._run_pipeline(analysis, transcript)
+                stage = "reports"
+                self._run_reports(analysis, result)
+            except Exception:
+                log.exception("analysis %s failed at stage=%s", analysis_id, stage)
+                self.repo.update(
+                    analysis_id,
+                    status=AnalysisStatus.FAILED,
+                    error_message=_SAFE_MESSAGES[stage],
+                    completed_at=_utcnow(),
+                )
+                raise
 
-    def _run_transcription(self, analysis: Analysis) -> Transcript:
+    def _run_transcription(self, analysis: Analysis, usage: UsageCollector) -> Transcript:
         self.repo.update_status(analysis.id, AnalysisStatus.TRANSCRIBING, started_at=_utcnow())
-        transcript = self.engine.load_transcript(self.storage.path(analysis.file_path))
+        file_path = self.storage.path(analysis.file_path)
+        transcript = self.engine.load_transcript(file_path)
+        self._record_transcription_usage(analysis, file_path, usage)
         self.repo.update(
             analysis.id,
             transcription=transcript.model_dump(mode="json"),
             status=AnalysisStatus.TRANSCRIBED,
         )
         return transcript
+
+    def _record_transcription_usage(
+        self, analysis: Analysis, file_path: Path, usage: UsageCollector
+    ) -> None:
+        """Whisper é faturado por minuto de áudio e não passa pelo LangChain (a engine usa o
+        SDK bruto), então medimos o arquivo com ffprobe e registramos o evento à mão.
+
+        `.docx`/`.txt` não geram evento: são lidos localmente e não custam nada.
+
+        Registrado só no caminho de sucesso. Uma falha no meio da transcrição pode
+        subcontar, mas o contrário — registrar sempre — superestimaria quando o ffmpeg do
+        chunking falha antes de qualquer chamada ao Whisper.
+        """
+        if analysis.input_type not in TRANSCRIBED_INPUT_TYPES:
+            return
+
+        duration = probe_duration_seconds(
+            file_path, timeout_seconds=self.settings.AI_COST_FFPROBE_TIMEOUT_SECONDS
+        )
+        usage.add(
+            PendingUsage(
+                feature=AiUsageFeature.ANALYSIS,
+                operation=AiUsageOperation.TRANSCRIPTION,
+                model=WHISPER_MODEL_NAME,
+                stage=STAGE_TRANSCRIPTION,
+                audio_seconds=duration,
+                # Uma linha só, com a duração total do arquivo: os chunks de
+                # audio_chunking particionam o áudio, então a soma das durações é a
+                # duração original e o número de chamadas HTTP não altera a fatura.
+                # `calls` guarda quantas chamadas foram, para fins de diagnóstico.
+                calls=_safe_whisper_call_count(file_path, duration),
+            )
+        )
 
     def _run_pipeline(self, analysis: Analysis, transcript: Transcript) -> AnalysisResult:
         self.repo.update_status(analysis.id, AnalysisStatus.ANALYZING)

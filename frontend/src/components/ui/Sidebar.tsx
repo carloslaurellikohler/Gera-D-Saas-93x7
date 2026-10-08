@@ -23,6 +23,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { to: "/admin", icon: "insights", label: "Painel administrativo", allow: ["ADMIN"] },
   { to: "/calibracao", icon: "tune", label: "Metodologia", allow: ["ADMIN"] },
   { to: "/usuarios", icon: "group", label: "Usuários", allow: ["ADMIN"] },
+  { to: "/custos-ia", icon: "savings", label: "Custos de IA", allow: ["ADMIN"] },
 ];
 
 export const ROLE_BADGE_CLASS: Record<UserRole, string> = {

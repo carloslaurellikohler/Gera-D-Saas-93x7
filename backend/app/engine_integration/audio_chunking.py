@@ -9,6 +9,7 @@ em ROADMAP.md)."""
 from __future__ import annotations
 
 import logging
+import math
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,6 +32,18 @@ def needs_chunking(file_path: Path) -> bool:
         return False  # passthrough: .docx/.txt nunca passam por aqui
     size_mb = file_path.stat().st_size / (1024 * 1024)
     return size_mb > WHISPER_MAX_FILE_MB
+
+
+def whisper_call_count(file_path: Path, duration_seconds: float | None) -> int:
+    """Quantas chamadas ao Whisper a transcrição deste arquivo custa.
+
+    Mora aqui porque é este módulo que conhece o tamanho do chunk. Usado só para
+    diagnóstico no FinAI (app/services/analysis_service.py): o faturamento do Whisper é por
+    minuto de áudio, então o número de chamadas HTTP não altera o custo.
+    """
+    if duration_seconds is None or not needs_chunking(file_path):
+        return 1
+    return max(1, math.ceil(float(duration_seconds) / _CHUNK_DURATION_SECONDS))
 
 
 def load_transcript_chunked(file_path: Path, engine_settings: EngineSettings) -> Transcript:

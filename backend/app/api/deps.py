@@ -7,11 +7,16 @@ import jwt
 from fastapi import Cookie, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.ai_cost.recorder import get_usage_sink
 from app.core.config import Settings, get_settings
 from app.core.security import ACCESS_TOKEN_COOKIE, decode_access_token
 from app.db.session import get_db
 from app.engine_integration.adapter import EngineAdapter, NoPublishedMethodologyError
 from app.models.user import User, UserRole, UserStatus
+from app.repositories.ai_cost_config_repository import AiCostConfigRepository
+from app.repositories.ai_cost_repository import AiCostRepository
+from app.repositories.ai_price_repository import AiPriceRepository
+from app.repositories.ai_usage_repository import AiUsageRepository
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.chat_message_repository import ChatMessageRepository
 from app.repositories.content_repository import ContentRepository
@@ -22,6 +27,7 @@ from app.repositories.methodology_chunk_repository import MethodologyChunkReposi
 from app.repositories.methodology_repository import MethodologyRepository
 from app.repositories.metrics_repository import MetricsRepository
 from app.repositories.user_repository import UserRepository
+from app.services.ai_cost_service import AiCostService
 from app.services.analysis_service import AnalysisService
 from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
@@ -46,6 +52,16 @@ def get_analysis_service(
         storage=LocalDiskStorage(settings.STORAGE_DIR),
         engine=engine,
         settings=settings,
+        usage_sink=get_usage_sink(),
+    )
+
+
+def get_ai_cost_service(db: Session = Depends(get_db)) -> AiCostService:
+    return AiCostService(
+        repo=AiCostRepository(db),
+        price_repo=AiPriceRepository(db),
+        config_repo=AiCostConfigRepository(db),
+        usage_repo=AiUsageRepository(db),
     )
 
 
@@ -103,6 +119,7 @@ def get_assistant_service(
         metrics_repo=MetricsRepository(db),
         user_repo=UserRepository(db),
         settings=settings,
+        usage_sink=get_usage_sink(),
     )
 
 
