@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAnalyses } from "../hooks/useAnalyses";
 import { useDashboardStats } from "../hooks/useDashboardStats";
-import { formatDate } from "../lib/format";
+import { formatDate, formatDurationSeconds } from "../lib/format";
 import StatusBadge from "../components/ui/StatusBadge";
 import BoardTable from "../components/ui/BoardTable";
 import EmptyState from "../components/ui/EmptyState";
@@ -37,6 +37,10 @@ function initialsOf(name: string): string {
 export default function DashboardPage() {
   const { hasRole } = useAuth();
   const isGestor = hasRole("GESTOR");
+  const showOwnerColumn = hasRole("ADMIN", "GESTOR");
+  const gridTemplateColumns = showOwnerColumn
+    ? "minmax(0,1.1fr) minmax(0,0.9fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px"
+    : "minmax(0,1.3fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px";
   const { data, isLoading, isError } = useAnalyses();
   const { data: stats } = useDashboardStats();
   const [filter, setFilter] = useState<FilterKey>("todos");
@@ -182,13 +186,13 @@ export default function DashboardPage() {
           </div>
 
           <div className="data-table">
-            <div
-              className="data-table-row data-table-head"
-              style={{ gridTemplateColumns: "minmax(0,1.2fr) minmax(0,1fr) 84px 176px 20px" }}
-            >
+            <div className="data-table-row data-table-head" style={{ gridTemplateColumns }}>
               <span>Participante</span>
+              {showOwnerColumn && <span>Colaborador</span>}
               <span>Objetivo</span>
+              <span>Tempo</span>
               <span>Data</span>
+              <span>Nota</span>
               <span>Status</span>
               <span />
             </div>
@@ -201,18 +205,28 @@ export default function DashboardPage() {
                     : `/analyses/${item.id}/processing`
                 }
                 className="data-table-row"
-                style={{
-                  gridTemplateColumns: "minmax(0,1.2fr) minmax(0,1fr) 84px 176px 20px",
-                  color: "inherit",
-                  textDecoration: "none",
-                }}
+                style={{ gridTemplateColumns, color: "inherit", textDecoration: "none" }}
               >
                 <span className="data-table-participant">
                   <span className="data-table-avatar">{initialsOf(item.participant_name)}</span>
                   <b style={{ fontWeight: 600 }}>{item.participant_name}</b>
                 </span>
+                {showOwnerColumn && <span>{item.owner_name ?? "—"}</span>}
                 <span>{item.objective}</span>
+                <span style={{ color: "var(--content-secondary)" }}>
+                  {formatDurationSeconds(item.duration_seconds)}
+                </span>
                 <span style={{ color: "var(--content-secondary)" }}>{formatDate(item.created_at)}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {item.overall_farol_level ? (
+                    <>
+                      <b>{item.overall_score?.toFixed(1) ?? "—"}</b>
+                      <FarolBadge level={toFarolLevel(item.overall_farol_level)} />
+                    </>
+                  ) : (
+                    <span style={{ color: "var(--content-secondary)" }}>—</span>
+                  )}
+                </span>
                 <StatusBadge status={item.status} />
                 <Icon name="chevron_right" size={20} color="var(--content-secondary)" />
               </Link>

@@ -83,6 +83,75 @@ def test_list_analyses(client):
     assert names == {"Ana", "Bruno"}
 
 
+def test_list_analyses_includes_owner_name_and_duration(client_factory):
+    owner_client, owner = client_factory()
+    _create_analysis(owner_client, participant_name="Ana", duration_minutes="30")
+
+    response = owner_client.get("/api/v1/analyses")
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["owner_id"] == str(owner.id)
+    assert item["owner_name"] == owner.name
+    assert item["duration_seconds"] == 30 * 60
+    # Análise recém-criada ainda não chegou a COMPLETED — nota/farol não existem.
+    assert item["overall_score"] is None
+    assert item["overall_farol_level"] is None
+
+
+def test_list_analyses_includes_score_and_farol_when_completed(client_factory, db_session):
+    owner_client, owner = client_factory()
+    db_session.add(
+        Methodology(
+            calibration_version="v1",
+            methodology_name="93x7®",
+            project="Projeto Teste",
+            status=MethodologyStatus.PUBLISHED,
+            content={"objective": "Avaliar."},
+            calibrators=[
+                Calibrator(
+                    key="excelente", label="Excelente desempenho", color=FarolColor.VERDE,
+                    min=8.0, max=10.0, order_index=0,
+                ),
+            ],
+        )
+    )
+    db_session.commit()
+    AnalysisRepository(db_session).create(
+        Analysis(
+            participant_name="Ana",
+            objective="Onboarding",
+            input_type="txt",
+            interaction_id="interaction-list-completed",
+            owner_id=owner.id,
+            status=AnalysisStatus.COMPLETED,
+            completed_at=datetime.now(timezone.utc),
+            analysis_result={"overall_score": 8.5, "overall_band_label": "Excelente desempenho"},
+        )
+    )
+
+    response = owner_client.get("/api/v1/analyses")
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["overall_score"] == 8.5
+    assert item["overall_farol_level"] == "excelente"
+
+
+def test_list_analyses_total_reflects_full_count_not_just_page(client_factory):
+    owner_client, _ = client_factory()
+    _create_analysis(owner_client, participant_name="Ana")
+    _create_analysis(owner_client, participant_name="Bruno")
+    _create_analysis(owner_client, participant_name="Carla")
+
+    response = owner_client.get("/api/v1/analyses", params={"page": 1, "page_size": 1})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["total"] == 3
+
+
 def test_list_analyses_filters_by_status(client):
     _create_analysis(client, participant_name="Ana")
 

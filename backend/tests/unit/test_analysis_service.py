@@ -9,7 +9,7 @@ from gera_d_engine.schemas.transcript import Transcript, TranscriptTurn
 
 from app.core.config import Settings
 from app.models.analysis import AnalysisStatus
-from app.models.methodology import Methodology, MethodologyStatus
+from app.models.methodology import Calibrator, FarolColor, Methodology, MethodologyStatus
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.user_repository import UserRepository
@@ -531,6 +531,52 @@ def test_quota_check_happens_before_file_validation(storage, db_session, tmp_pat
             file_size_bytes=len(invalid_content),
             file_header=invalid_content[:4096],
         )
+
+
+def test_list_analyses_includes_owner_name_duration_and_farol_only_when_completed(
+    service: AnalysisService, storage, tmp_path, current_user, db_session
+):
+    db_session.add(
+        Calibrator(
+            key="excelente",
+            label="Excelente desempenho",
+            color=FarolColor.VERDE,
+            min=8.0,
+            max=10.0,
+            order_index=0,
+            methodology_id=service.engine.methodology_id,
+        )
+    )
+    db_session.commit()
+
+    in_progress = _create_uploaded_analysis(service, storage, current_user, tmp_path, file_name="a.txt")
+    completed = _create_uploaded_analysis(service, storage, current_user, tmp_path, file_name="b.txt")
+    service.repo.update(
+        completed.id,
+        status=AnalysisStatus.COMPLETED,
+        analysis_result={"overall_score": 8.5, "overall_band_label": "Excelente desempenho"},
+    )
+
+    items, total = service.list_analyses(status=None, owner_ids=[current_user.id], offset=0, limit=20)
+    by_id = {item.id: item for item in items}
+
+    assert total == 2
+    assert by_id[in_progress.id].owner_name == current_user.name
+    assert by_id[in_progress.id].duration_seconds == 45 * 60
+    assert by_id[in_progress.id].overall_score is None
+    assert by_id[in_progress.id].overall_farol_level is None
+    assert by_id[completed.id].overall_score == 8.5
+    assert by_id[completed.id].overall_farol_level == "excelente"
+
+
+def test_list_analyses_total_ignores_limit(service: AnalysisService, storage, tmp_path, current_user):
+    for i in range(3):
+        _create_uploaded_analysis(service, storage, current_user, tmp_path, file_name=f"q{i}.txt")
+
+    items, total = service.list_analyses(status=None, owner_ids=[current_user.id], offset=0, limit=1)
+
+    assert len(items) == 1
+    assert total == 3
 
 
 def test_get_daily_quota_reflects_used_and_remaining(service: AnalysisService, storage, tmp_path, current_user):

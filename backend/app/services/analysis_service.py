@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import tempfile
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -20,6 +21,7 @@ from app.ai_cost.constants import TRANSCRIBED_INPUT_TYPES
 from app.ai_cost.recorder import UsageSink
 from app.ai_cost.stages import STAGE_TRANSCRIPTION
 from app.core.config import Settings
+from app.core.farol import get_farol_level
 from app.engine_integration.adapter import EngineAdapter
 from app.engine_integration.audio_chunking import whisper_call_count
 from app.engine_integration.mappers import build_input_metadata, slugify
@@ -27,6 +29,7 @@ from app.models.ai_cost import AiUsageFeature, AiUsageOperation
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.user import User, UserRole
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.methodology_repository import MethodologyRepository
 from app.services.validation import sanitize_filename, validate_upload_streamed
 from app.storage.base import FileStorage
 
@@ -56,6 +59,20 @@ class DailyAnalysisLimitError(ValueError):
         super().__init__(
             "O limite de análises de hoje para este colaborador foi atingido. Volte amanhã."
         )
+
+
+@dataclass(frozen=True)
+class AnalysisListRow:
+    id: uuid.UUID
+    participant_name: str
+    objective: str
+    status: AnalysisStatus
+    created_at: datetime
+    owner_id: uuid.UUID | None
+    owner_name: str | None
+    duration_seconds: int | None
+    overall_score: float | None
+    overall_farol_level: str | None
 
 
 @dataclass(frozen=True)
@@ -93,6 +110,38 @@ class AnalysisService:
         start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         used = self.repo.count_today(owner_id=target_owner.id, since=start_of_day)
         return DailyQuota(used=used, limit=self.settings.DAILY_ANALYSIS_LIMIT_PER_OWNER, exempt=exempt)
+
+    def list_analyses(
+        self,
+        *,
+        status: AnalysisStatus | None,
+        owner_ids: Sequence[uuid.UUID] | None,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[AnalysisListRow], int]:
+        label_color_map = MethodologyRepository(self.repo.db).get_label_color_map()
+        rows = self.repo.list_with_owner(status=status, owner_ids=owner_ids, offset=offset, limit=limit)
+        total = self.repo.count(status=status, owner_ids=owner_ids)
+        items = [
+            AnalysisListRow(
+                id=row.id,
+                participant_name=row.participant_name,
+                objective=row.objective,
+                status=row.status,
+                created_at=row.created_at,
+                owner_id=row.owner_id,
+                owner_name=row.owner_name,
+                duration_seconds=row.duration_seconds,
+                overall_score=row.overall_score,
+                overall_farol_level=(
+                    get_farol_level(row.band_label, label_color_map)
+                    if row.status == AnalysisStatus.COMPLETED
+                    else None
+                ),
+            )
+            for row in rows
+        ]
+        return items, total
 
     def create_and_store(
         self,

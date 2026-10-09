@@ -126,8 +126,8 @@ def list_analyses(
 ):
     offset = (page - 1) * page_size
     owner_ids = _owner_scope(current_user, db)
-    items = service.repo.list(status=status, owner_ids=owner_ids, offset=offset, limit=page_size)
-    return PaginatedResponse(items=items, total=len(items), page=page, page_size=page_size)
+    items, total = service.list_analyses(status=status, owner_ids=owner_ids, offset=offset, limit=page_size)
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 def _resolve_quota_target(

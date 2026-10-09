@@ -178,6 +178,58 @@ def test_count_today_respects_since_boundary(db_session):
     assert count == 0
 
 
+def test_list_with_owner_includes_owner_name_via_left_join(db_session):
+    owner = _create_user(db_session, "owner-list-with-owner@example.com")
+    repo = AnalysisRepository(db_session)
+    repo.create(_new_analysis(interaction_id="interaction-lwo-1", owner_id=owner.id))
+
+    [row] = repo.list_with_owner(owner_ids=[owner.id])
+
+    assert row.owner_id == owner.id
+    assert row.owner_name == owner.name
+
+
+def test_list_with_owner_keeps_orphan_analysis_with_null_owner_name(db_session):
+    repo = AnalysisRepository(db_session)
+    repo.create(_new_analysis(interaction_id="interaction-lwo-2"))
+
+    rows = repo.list_with_owner(owner_ids=None)
+
+    assert len(rows) == 1
+    assert rows[0].owner_id is None
+    assert rows[0].owner_name is None
+
+
+def test_list_with_owner_extracts_score_and_band_only_when_completed(db_session):
+    repo = AnalysisRepository(db_session)
+    in_progress = repo.create(_new_analysis(interaction_id="interaction-lwo-3"))
+    completed = repo.create(_new_analysis(interaction_id="interaction-lwo-4"))
+    repo.update(
+        completed.id,
+        status=AnalysisStatus.COMPLETED,
+        analysis_result={"overall_score": 7.2, "overall_band_label": "Atenção"},
+    )
+
+    rows = {row.id: row for row in repo.list_with_owner()}
+
+    assert rows[in_progress.id].overall_score is None
+    assert rows[in_progress.id].band_label is None
+    assert rows[completed.id].overall_score == 7.2
+    assert rows[completed.id].band_label == "Atenção"
+
+
+def test_count_matches_filters_regardless_of_limit(db_session):
+    owner = _create_user(db_session, "owner-count-filters@example.com")
+    repo = AnalysisRepository(db_session)
+    repo.create(_new_analysis(interaction_id="interaction-count-filters-1", owner_id=owner.id))
+    repo.create(_new_analysis(interaction_id="interaction-count-filters-2", owner_id=owner.id))
+    repo.create(_new_analysis(interaction_id="interaction-count-filters-3"))
+
+    assert repo.count(owner_ids=[owner.id]) == 2
+    assert repo.count() == 3
+    assert len(repo.list_with_owner(owner_ids=[owner.id], limit=1)) == 1
+
+
 def test_count_today_is_scoped_to_owner(db_session):
     owner_a = _create_user(db_session, "owner-a-scope@example.com")
     owner_b = _create_user(db_session, "owner-b-scope@example.com")

@@ -27,6 +27,11 @@ export interface AnalysisListItem {
   objective: string;
   status: AnalysisStatus;
   created_at: string;
+  owner_id: string | null;
+  owner_name: string | null;
+  duration_seconds: number | null;
+  overall_score: number | null;
+  overall_farol_level: string | null;
 }
 
 export interface AnalysisResponse {

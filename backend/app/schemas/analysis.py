@@ -20,6 +20,11 @@ class AnalysisListItem(BaseModel):
     objective: str
     status: AnalysisStatus
     created_at: datetime
+    owner_id: uuid.UUID | None
+    owner_name: str | None
+    duration_seconds: int | None
+    overall_score: float | None
+    overall_farol_level: str | None
 
 
 class AnalysisResponse(BaseModel):

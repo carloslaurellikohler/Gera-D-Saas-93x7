@@ -39,7 +39,18 @@ const GESTOR: User = { ...COLABORADOR, id: "gestor-1", role: "GESTOR" };
 
 const ANALYSES: PaginatedResponse<AnalysisListItem> = {
   items: [
-    { id: "1", participant_name: "João Silva", objective: "Onboarding", status: "COMPLETED", created_at: "2026-01-01T00:00:00Z" },
+    {
+      id: "1",
+      participant_name: "João Silva",
+      objective: "Onboarding",
+      status: "COMPLETED",
+      created_at: "2026-01-01T00:00:00Z",
+      owner_id: "colab-1",
+      owner_name: "Colaboradora Teste",
+      duration_seconds: 1800,
+      overall_score: 8.5,
+      overall_farol_level: "excelente",
+    },
   ],
   total: 1,
   page: 1,
@@ -86,6 +97,45 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Minhas análises")).not.toBeInTheDocument();
   });
 
+  it("hides the Colaborador column for a COLABORADOR but shows tempo and nota", async () => {
+    vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    expect(screen.queryByText("Colaborador")).not.toBeInTheDocument();
+    expect(screen.getByText("30 min")).toBeInTheDocument();
+    expect(screen.getByText("8.5")).toBeInTheDocument();
+    expect(screen.getByText("Excelente")).toBeInTheDocument();
+  });
+
+  it("shows the Colaborador column with the owner name for a GESTOR", async () => {
+    vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(GESTOR);
+    vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    expect(screen.getByText("Colaborador")).toBeInTheDocument();
+    expect(screen.getByText("Colaboradora Teste")).toBeInTheDocument();
+  });
+
+  it("shows a dash in the Nota column when the analysis has no score/farol yet", async () => {
+    vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue({
+      ...ANALYSES,
+      items: [{ ...ANALYSES.items[0], overall_score: null, overall_farol_level: null, duration_seconds: null }],
+    });
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    expect(screen.queryByText("8.5")).not.toBeInTheDocument();
+    expect(screen.queryByText("Excelente")).not.toBeInTheDocument();
+  });
+
   it("shows the team board and team-scoped KPI labels for a GESTOR", async () => {
     vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(GESTOR);
     vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
@@ -100,6 +150,8 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("Análises da equipe")).toBeInTheDocument();
     expect(screen.getByText("Quadro da equipe")).toBeInTheDocument();
-    expect(screen.getByText("Colaboradora Teste")).toBeInTheDocument();
+    // Aparece duas vezes: no "Quadro da equipe" (agregado) e na coluna Colaborador
+    // da tabela de análises (mesmo colaborador dono da análise do fixture ANALYSES).
+    expect(screen.getAllByText("Colaboradora Teste").length).toBeGreaterThan(0);
   });
 });

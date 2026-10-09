@@ -5,10 +5,14 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import Float, Row, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis, AnalysisStatus
+from app.models.user import User
+
+_BAND_LABEL = Analysis.analysis_result["overall_band_label"].astext
+_OVERALL_SCORE = cast(Analysis.analysis_result["overall_score"].astext, Float)
 
 
 class AnalysisRepository:
@@ -39,6 +43,55 @@ class AnalysisRepository:
             stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
         stmt = stmt.offset(offset).limit(limit)
         return list(self.db.execute(stmt).scalars().all())
+
+    def list_with_owner(
+        self,
+        *,
+        status: AnalysisStatus | None = None,
+        owner_ids: Sequence[uuid.UUID] | None = None,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> list[Row]:
+        """Linhas cruas para a listagem do dashboard: traz o nome do dono (colaborador
+        que fez a ligação) via LEFT JOIN — não INNER JOIN, porque owner_id é SET NULL e
+        o ADMIN (owner_ids=None, sem filtro) precisa continuar vendo análises com dono
+        removido — e a nota/farol extraídos do JSONB (None quando a análise ainda não
+        está COMPLETED)."""
+        stmt = (
+            select(
+                Analysis.id,
+                Analysis.participant_name,
+                Analysis.objective,
+                Analysis.status,
+                Analysis.created_at,
+                Analysis.owner_id,
+                User.name.label("owner_name"),
+                Analysis.duration_seconds,
+                _OVERALL_SCORE.label("overall_score"),
+                _BAND_LABEL.label("band_label"),
+            )
+            .outerjoin(User, User.id == Analysis.owner_id)
+            .order_by(Analysis.created_at.desc())
+        )
+        if status is not None:
+            stmt = stmt.where(Analysis.status == status)
+        if owner_ids is not None:
+            stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
+        stmt = stmt.offset(offset).limit(limit)
+        return list(self.db.execute(stmt).all())
+
+    def count(
+        self,
+        *,
+        status: AnalysisStatus | None = None,
+        owner_ids: Sequence[uuid.UUID] | None = None,
+    ) -> int:
+        stmt = select(func.count()).select_from(Analysis)
+        if status is not None:
+            stmt = stmt.where(Analysis.status == status)
+        if owner_ids is not None:
+            stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
+        return self.db.execute(stmt).scalar_one()
 
     def update(self, analysis_id: uuid.UUID, **fields: Any) -> Analysis:
         analysis = self.get(analysis_id)
