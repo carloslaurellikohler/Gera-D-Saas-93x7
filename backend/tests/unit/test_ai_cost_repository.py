@@ -354,6 +354,28 @@ def test_list_events_filtra_por_feature_e_usuario(repo, cenario):
     assert total_carla == 1
 
 
+def test_list_events_filtra_por_analise(repo, cenario):
+    pagina, total = repo.list_events(since=_since(), analysis_id=cenario["analise_caro"].id)
+
+    assert total == 4  # transcrição + 2 chats + a chamada que falhou (sem unidades)
+    assert all(row.analysis_id == cenario["analise_caro"].id for row in pagina)
+
+
+def test_list_events_traz_participante_da_analise_associada(repo, cenario):
+    """O gap reportado: a tela de Chamadas precisa dizer a qual participante avaliado uma
+    chamada pertence, não só o usuário que a disparou."""
+    pagina, _ = repo.list_events(since=_since(), analysis_id=cenario["analise_caro"].id)
+
+    assert all(row.participant_name == "PB Caro" for row in pagina)
+
+
+def test_list_events_participante_e_none_sem_analise_associada(repo, cenario):
+    """Eventos do assistente/ingestão não têm analysis_id — o join é outer de propósito."""
+    pagina, _ = repo.list_events(since=_since(), feature="ASSISTANT")
+
+    assert all(row.participant_name is None for row in pagina)
+
+
 def test_list_events_traz_nome_do_usuario_e_status(repo, cenario):
     pagina, _ = repo.list_events(since=_since(), feature="ASSISTANT", operation="EMBEDDING")
 

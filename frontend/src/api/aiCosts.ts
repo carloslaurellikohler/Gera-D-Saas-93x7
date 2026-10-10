@@ -22,6 +22,7 @@ export function listAiCostEvents(filters: AiUsageEventFilters = {}) {
   if (filters.feature) params.set("feature", filters.feature);
   if (filters.operation) params.set("operation", filters.operation);
   if (filters.model) params.set("model", filters.model);
+  if (filters.analysis_id) params.set("analysis_id", filters.analysis_id);
   if (filters.offset) params.set("offset", String(filters.offset));
   if (filters.limit) params.set("limit", String(filters.limit));
   return apiGet<AiUsageEventPage>(`/ai-costs/events?${params.toString()}`);

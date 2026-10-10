@@ -261,6 +261,7 @@ class AiCostService:
                     user_id=str(row.user_id) if row.user_id else None,
                     user_name=row.user_name,
                     analysis_id=str(row.analysis_id) if row.analysis_id else None,
+                    participant_name=row.participant_name,
                     attempt=row.attempt,
                     calls=row.calls,
                     input_tokens=row.input_tokens,

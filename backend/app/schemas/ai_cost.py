@@ -141,6 +141,7 @@ class AiUsageEventItem(BaseModel):
     user_id: str | None
     user_name: str | None
     analysis_id: str | None
+    participant_name: str | None
     attempt: int
     calls: int
     input_tokens: int

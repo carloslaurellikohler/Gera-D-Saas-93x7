@@ -251,6 +251,7 @@ class AiCostRepository:
                 AiUsageEvent.user_id,
                 User.name.label("user_name"),
                 AiUsageEvent.analysis_id,
+                Analysis.participant_name,
                 AiUsageEvent.attempt,
                 AiUsageEvent.calls,
                 AiUsageEvent.input_tokens,
@@ -264,6 +265,8 @@ class AiCostRepository:
                 AiUsageEvent.error_type,
             )
             .outerjoin(User, User.id == AiUsageEvent.user_id)
+            # outer: eventos de ASSISTANT/INGESTION não têm analysis_id
+            .outerjoin(Analysis, Analysis.id == AiUsageEvent.analysis_id)
             .where(*filters)
             .order_by(AiUsageEvent.occurred_at.desc())
             .offset(offset)

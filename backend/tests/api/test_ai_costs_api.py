@@ -19,6 +19,7 @@ from app.models.ai_cost import (
     AiUsageFeature,
     AiUsageOperation,
 )
+from app.models.analysis import Analysis, AnalysisStatus
 from app.models.user import UserRole
 
 
@@ -192,6 +193,43 @@ def test_events_lista_modelos_para_o_filtro(admin_client, some_events):
     body = admin_client.get("/api/v1/ai-costs/events").json()
 
     assert set(body["models"]) == {"gpt-6-sol", "text-embedding-3-small"}
+
+
+def test_events_trazem_participante_e_filtram_por_analise(admin_client, db_session):
+    """O gap reportado: a tela de Chamadas precisa dizer a qual participante avaliado uma
+    chamada pertence, e permitir filtrar por análise."""
+    analise = Analysis(
+        participant_name="PB da Chamada",
+        objective="Onboarding",
+        input_type="mp3",
+        status=AnalysisStatus.COMPLETED,
+        interaction_id=str(uuid.uuid4()),
+    )
+    db_session.add(analise)
+    db_session.flush()
+    db_session.add(
+        AiUsageEvent(
+            occurred_at=datetime.now(timezone.utc),
+            feature=AiUsageFeature.ANALYSIS,
+            operation=AiUsageOperation.CHAT,
+            stage="TRAINING",
+            model="gpt-6-sol",
+            analysis_id=analise.id,
+            input_tokens=100,
+            output_tokens=10,
+            cost_usd=Decimal("0.01"),
+            cost_status=AiUsageCostStatus.PRICED,
+        )
+    )
+    db_session.commit()
+
+    sem_filtro = admin_client.get("/api/v1/ai-costs/events").json()
+    assert any(item["participant_name"] == "PB da Chamada" for item in sem_filtro["items"])
+
+    filtrado = admin_client.get(f"/api/v1/ai-costs/events?analysis_id={analise.id}").json()
+    assert filtrado["total"] == 1
+    assert filtrado["items"][0]["participant_name"] == "PB da Chamada"
+    assert filtrado["items"][0]["analysis_id"] == str(analise.id)
 
 
 # --- Preços ---

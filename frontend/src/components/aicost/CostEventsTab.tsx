@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAiCostEvents } from "../../hooks/useAiCostEvents";
 import { formatDateTime, formatUsd } from "../../lib/format";
 import type { AiCostFeature, AiCostOperation, AiCostPeriod, AiCostStatus } from "../../types/aiCost";
@@ -28,19 +28,42 @@ const STATUS_HINT: Record<AiCostStatus, string | null> = {
   NO_UNITS: "sem medição",
 };
 
-const COLUMNS = "160px 110px 110px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 110px 110px";
+const COLUMNS =
+  "160px 110px 110px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 110px 110px";
 
-export default function CostEventsTab({ period }: { period: AiCostPeriod }) {
+export default function CostEventsTab({
+  period,
+  initialAnalysisId,
+  onAnalysisFilterCleared,
+}: {
+  period: AiCostPeriod;
+  initialAnalysisId?: string;
+  /** Avisa o componente pai para esquecer o filtro — sem isso, trocar de aba e voltar
+   *  reaplica o `initialAnalysisId` antigo, "ressuscitando" um filtro que o usuário já
+   *  tinha limpado. */
+  onAnalysisFilterCleared?: () => void;
+}) {
   const [feature, setFeature] = useState<AiCostFeature | "all">("all");
   const [operation, setOperation] = useState<AiCostOperation | "all">("all");
   const [model, setModel] = useState<string>("all");
   const [offset, setOffset] = useState(0);
+  const [analysisId, setAnalysisId] = useState<string | undefined>(initialAnalysisId);
+
+  // Vem de um clique em "Participante avaliado" na Visão geral — cada novo valor (mesmo
+  // disparado enquanto já se está nesta aba) deve substituir o filtro e voltar à página 1.
+  useEffect(() => {
+    if (initialAnalysisId) {
+      setAnalysisId(initialAnalysisId);
+      setOffset(0);
+    }
+  }, [initialAnalysisId]);
 
   const events = useAiCostEvents({
     period,
     feature: feature === "all" ? undefined : feature,
     operation: operation === "all" ? undefined : operation,
     model: model === "all" ? undefined : model,
+    analysis_id: analysisId,
     offset,
     limit: PAGE_SIZE,
   });
@@ -107,6 +130,35 @@ export default function CostEventsTab({ period }: { period: AiCostPeriod }) {
         </span>
       </div>
 
+      {analysisId && (
+        <div style={{ marginBottom: 16 }}>
+          <span className="pill" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            Filtrado por análise:{" "}
+            {data?.items[0]?.participant_name ?? data?.items[0]?.analysis_id ?? analysisId}
+            <button
+              type="button"
+              onClick={() =>
+                resetTo(() => {
+                  setAnalysisId(undefined);
+                  onAnalysisFilterCleared?.();
+                })
+              }
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                font: "inherit",
+                color: "var(--content-link)",
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              limpar
+            </button>
+          </span>
+        </div>
+      )}
+
       {events.isLoading && <p className="page-subtitle">Carregando...</p>}
       {events.isError && (
         <p className="error-text">Não foi possível carregar os eventos de consumo.</p>
@@ -128,6 +180,7 @@ export default function CostEventsTab({ period }: { period: AiCostPeriod }) {
               <span>Origem</span>
               <span>Operação</span>
               <span>Etapa</span>
+              <span>Análise</span>
               <span>Modelo</span>
               <span>Usuário</span>
               <span style={{ textAlign: "right" }}>Tokens</span>
@@ -152,6 +205,9 @@ export default function CostEventsTab({ period }: { period: AiCostPeriod }) {
                         · {event.attempt + 1}ª tentativa
                       </span>
                     )}
+                  </span>
+                  <span style={{ fontSize: 13, color: "var(--content-secondary)" }}>
+                    {event.participant_name ?? "—"}
                   </span>
                   <span style={{ fontSize: 13 }}>{event.model}</span>
                   <span style={{ fontSize: 13, color: "var(--content-secondary)" }}>

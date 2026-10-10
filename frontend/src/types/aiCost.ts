@@ -124,6 +124,7 @@ export interface AiUsageEvent {
   user_id: string | null;
   user_name: string | null;
   analysis_id: string | null;
+  participant_name: string | null;
   attempt: number;
   calls: number;
   input_tokens: number;
@@ -150,6 +151,7 @@ export interface AiUsageEventFilters {
   feature?: AiCostFeature;
   operation?: AiCostOperation;
   model?: string;
+  analysis_id?: string;
   offset?: number;
   limit?: number;
 }

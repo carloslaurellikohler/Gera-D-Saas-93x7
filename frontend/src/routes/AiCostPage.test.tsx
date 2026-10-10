@@ -117,6 +117,7 @@ const EVENTS: AiUsageEventPage = {
       user_id: "u1",
       user_name: "Colaborador Bruno",
       analysis_id: "a1",
+      participant_name: "PB Caro",
       attempt: 0,
       calls: 1,
       input_tokens: 32000,
@@ -140,6 +141,7 @@ const EVENTS: AiUsageEventPage = {
       user_id: "u1",
       user_name: "Colaborador Bruno",
       analysis_id: "a1",
+      participant_name: "PB Caro",
       attempt: 0,
       calls: 1,
       input_tokens: 0,
@@ -264,6 +266,32 @@ describe("AiCostPage", () => {
     expect(await screen.findByText("T&D e avaliação final")).toBeInTheDocument();
     expect(screen.getByText("sem medição")).toBeInTheDocument();
     expect(screen.getByText("2 chamadas no período · página 1 de 1")).toBeInTheDocument();
+    // Gap reportado: a linha precisa dizer a qual participante avaliado a chamada pertence.
+    expect(screen.getAllByText("PB Caro").length).toBeGreaterThan(0);
+  });
+
+  it("mostra a quantidade de chamadas por participante avaliado na visão geral", async () => {
+    renderPage();
+
+    const participante = await screen.findByText("PB Caro");
+    // "Chamadas" já existe como aba e como cabeçalho na tabela de usuários acima — a
+    // tabela de participantes ganha mais uma ocorrência com a coluna nova.
+    expect(screen.getAllByText("Chamadas").length).toBe(3);
+    // top_analyses[0].events === 9, no mock acima — confere na própria linha do participante.
+    expect(participante.closest(".data-table-row")).toHaveTextContent("9");
+  });
+
+  it("navega para Chamadas filtrado ao clicar no participante da visão geral", async () => {
+    renderPage();
+    await screen.findByText("Custo total no período");
+
+    await userEvent.click(screen.getByRole("button", { name: "PB Caro" }));
+
+    expect(await screen.findByText("T&D e avaliação final")).toBeInTheDocument();
+    expect(screen.getByText(/Filtrado por análise:/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "limpar" }));
+    expect(screen.queryByText(/Filtrado por análise:/)).not.toBeInTheDocument();
   });
 
   it("lista os preços por vigência na aba de preços", async () => {

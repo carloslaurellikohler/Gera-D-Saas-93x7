@@ -37,9 +37,11 @@ const BUDGET_COLORS: Record<string, string> = {
 export default function CostOverviewTab({
   summary,
   onGoToPrices,
+  onViewAnalysisCalls,
 }: {
   summary: AiCostSummary;
   onGoToPrices: () => void;
+  onViewAnalysisCalls: (analysisId: string) => void;
 }) {
   const { kpis, budget, usd_to_brl_rate: rate } = summary;
 
@@ -416,13 +418,16 @@ export default function CostOverviewTab({
       <div className="data-table">
         <div
           className="data-table-row data-table-head"
-          style={{ gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr) 120px 90px 100px 120px" }}
+          style={{
+            gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr) 120px 90px 100px 90px 120px",
+          }}
         >
           <span>Participante avaliado</span>
           <span>Colaborador</span>
           <span>Criada em</span>
           <span>Entrada</span>
           <span>Tentativas</span>
+          <span>Chamadas</span>
           <span style={{ textAlign: "right" }}>Custo</span>
         </div>
         {summary.top_analyses.length === 0 ? (
@@ -434,15 +439,38 @@ export default function CostOverviewTab({
             <div
               key={row.analysis_id ?? `${row.participant_name}`}
               className="data-table-row"
-              style={{ gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr) 120px 90px 100px 120px" }}
+              style={{
+                gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr) 120px 90px 100px 90px 120px",
+              }}
             >
-              <span>{row.participant_name ?? "Análise excluída"}</span>
+              {row.analysis_id ? (
+                <button
+                  type="button"
+                  onClick={() => onViewAnalysisCalls(row.analysis_id as string)}
+                  title="Ver chamadas desta análise"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    font: "inherit",
+                    color: "var(--content-link)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    textDecoration: "underline",
+                  }}
+                >
+                  {row.participant_name ?? "—"}
+                </button>
+              ) : (
+                <span>{row.participant_name ?? "Análise excluída"}</span>
+              )}
               <span style={{ color: "var(--content-secondary)", fontSize: 13 }}>
                 {row.owner_name ?? "—"}
               </span>
               <span style={{ fontSize: 13 }}>{formatDateTime(row.created_at)}</span>
               <span style={{ fontSize: 13 }}>{row.input_type ?? "—"}</span>
               <span>{row.attempts > 0 ? `${row.attempts + 1}ª` : "1ª"}</span>
+              <span>{row.events}</span>
               <span style={{ textAlign: "right", fontWeight: 600 }}>{formatUsd(row.total_usd)}</span>
             </div>
           ))

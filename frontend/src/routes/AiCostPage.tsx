@@ -25,7 +25,13 @@ const TABS: { key: Tab; label: string }[] = [
 export default function AiCostPage() {
   const [period, setPeriod] = useState<AiCostPeriod>("30d");
   const [tab, setTab] = useState<Tab>("overview");
+  const [analysisIdFilter, setAnalysisIdFilter] = useState<string | undefined>(undefined);
   const { data, isLoading, isError } = useAiCostSummary(period);
+
+  const handleViewAnalysisCalls = (analysisId: string) => {
+    setAnalysisIdFilter(analysisId);
+    setTab("events");
+  };
 
   return (
     <div>
@@ -77,7 +83,11 @@ export default function AiCostPage() {
 
       {tab === "overview" && data && (
         <>
-          <CostOverviewTab summary={data} onGoToPrices={() => setTab("settings")} />
+          <CostOverviewTab
+            summary={data}
+            onGoToPrices={() => setTab("settings")}
+            onViewAnalysisCalls={handleViewAnalysisCalls}
+          />
           {/* A contabilização não tem backfill: análises anteriores à feature simplesmente
               não têm dados de token, e a tela diz isso em vez de fingir um histórico. */}
           <p className="page-subtitle" style={{ marginTop: 20, fontSize: 12 }}>
@@ -89,7 +99,13 @@ export default function AiCostPage() {
         </>
       )}
 
-      {tab === "events" && <CostEventsTab period={period} />}
+      {tab === "events" && (
+        <CostEventsTab
+          period={period}
+          initialAnalysisId={analysisIdFilter}
+          onAnalysisFilterCleared={() => setAnalysisIdFilter(undefined)}
+        />
+      )}
       {tab === "settings" && <CostSettingsTab />}
     </div>
   );
