@@ -4,7 +4,7 @@ Publicar uma nova versão aqui NÃO atualiza o corpus do Assistente de IA (Fase 
 indexa só docs/metodologia_93x7.pdf via backend/scripts/ingest_methodology.py, rodado
 manualmente. Se o racional da metodologia mudar de fato (não só a calibração técnica),
 alguém precisa atualizar o PDF e rodar o script de novo — os dois podem ficar
-dessincronizados silenciosamente, por design, nesta fase (ver ROADMAP.md)."""
+dessincronizados silenciosamente, por design, nesta fase."""
 
 from __future__ import annotations
 

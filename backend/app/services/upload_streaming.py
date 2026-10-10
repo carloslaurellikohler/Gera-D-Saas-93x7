@@ -1,6 +1,6 @@
 """Buffer de upload em streaming: lê em chunks, escreve incrementalmente em disco e aborta
 antecipadamente se exceder o limite — evita materializar uploads de até 1GB inteiros em
-memória (ver ROADMAP.md, nota sobre o limite de upload)."""
+memória."""
 
 from __future__ import annotations
 

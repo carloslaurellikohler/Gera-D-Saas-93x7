@@ -5,10 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 O repositório é escrito em português (código, comentários, mensagens de erro, commits).
 Mantenha esse idioma em código novo e em commits (`feat:`/`fix:` + descrição em pt-BR).
 
-Leia `ROADMAP.md` antes de qualquer trabalho não trivial: ele traz o estado de cada fase
-implementada e a seção **"Notas de decisão que não devem ser reabertas sem motivo"** — decisões
-arquiteturais já fechadas (engine intocada, auth stateless, sem autocadastro, sem transcodificação
-de áudio, nota geral nunca por fórmula, testes de repositório em Postgres real).
+Decisões arquiteturais já fechadas, que não devem ser reabertas sem motivo forte: engine
+intocada, auth stateless, sem autocadastro, sem transcodificação de áudio, nota geral nunca por
+fórmula, testes de repositório em Postgres real.
 
 ## Três pacotes, uma regra de ouro
 
@@ -214,6 +213,16 @@ Padrão **dono-ou-ADMIN retorna 404, nunca 403** para recurso de outro usuário 
 existência de IDs) — ver `routes/analyses.py::_get_owned_or_404`. O escopo de leitura (próprias vs.
 globais) é sempre derivado do usuário autenticado, nunca de parâmetro do cliente.
 
+`UserRole` tem três valores: `ADMIN`, `GESTOR`, `COLABORADOR`. `User.manager_id` liga um
+COLABORADOR ao seu GESTOR (hierarquia de um nível só, sem encadeamento); `UserRepository.
+list_subordinates` resolve a equipe, validada em `UserService`. `require_role(UserRole.GESTOR)`
+protege rotas de equipe; `AnalysisService`/`DashboardService` têm ramos específicos para o GESTOR
+(quadro de equipe).
+
+Cada usuário tem cota diária de análises: `DAILY_ANALYSIS_LIMIT_PER_OWNER` (`app/core/config.py`,
+hoje 4). `AnalysisService.get_daily_quota`/`create_and_store` verificam o uso do dia e levantam
+`DailyAnalysisLimitError` quando excedida.
+
 ### Farol (classificação da nota)
 
 `overall_band_label` dentro do JSONB `analysis_result` é a fonte de verdade. `app/core/farol.py`
@@ -229,12 +238,13 @@ api/<recurso>.ts   uma função por endpoint
 types/<recurso>.ts espelho manual dos schemas pydantic
 hooks/use*.ts      um hook por operação, @tanstack/react-query (queryKey estável, invalidação no mutate)
 routes/*.tsx       uma página por rota, cada uma com seu `.test.tsx` ao lado
-components/        ui/ (primitivos) · forms/ · results/ · auth/ · library/ · processing/
+components/        ui/ (primitivos) · forms/ · results/ · auth/ · library/ · processing/ · aicost/
 styles/tokens/     design tokens em CSS vars (cores, tipografia, spacing, elevação)
 ```
 
 Rotas em `App.tsx`: tudo dentro de `<ProtectedRoute>` + `AuthenticatedShell` (sidebar); telas
-administrativas (`/admin`, `/calibracao`, `/usuarios`) adicionalmente dentro de `<AdminRoute>`.
+administrativas (`/admin`, `/calibracao`, `/usuarios`, `/custos-ia`) adicionalmente envolvidas por
+`<RequireRole allow={["ADMIN"]}>` dentro do próprio `AuthenticatedShell`.
 
 Fluxo para expor um endpoint novo na UI: `api/` → `types/` → `hooks/` → página, nessa ordem.
 Testes de página usam Testing Library + mock do módulo de `api/`, nunca navegador real.

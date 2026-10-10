@@ -2,7 +2,7 @@
 analysis_result JSONB) é a fonte de verdade da classificação — este módulo só traduz o
 texto livre da engine para a chave (`FarolLevel`) que o frontend já usa em FarolBadge,
 para que backend e frontend nunca recalculem banding por conta própria a partir do
-overall_score (ver ROADMAP.md: nota geral vem do julgamento holístico da engine).
+overall_score (nota geral vem do julgamento holístico da engine, nunca de fórmula).
 
 Desde a Fase 7, o mapeamento label -> cor vem do Postgres (MethodologyRepository.
 get_label_color_map(), que cobre todas as versões já publicadas/arquivadas — uma

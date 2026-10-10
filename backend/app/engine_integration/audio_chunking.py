@@ -3,8 +3,7 @@ arquivo da API Whisper (gera_d_engine.ingestion.whisper_loader chama Whisper 1x 
 sem chunking, e não pode ser modificada por este módulo — engine/ fica intocada).
 
 Escopo estrito, sinalizado e aprovado pelo usuário: só contorna o limite de tamanho em
-.mp3/.mp4 já suportados — não introduz suporte a .wav/.m4a (decisão distinta, que permanece
-em ROADMAP.md)."""
+.mp3/.mp4 já suportados — não introduz suporte a .wav/.m4a (decisão distinta, já fechada)."""
 
 from __future__ import annotations
 

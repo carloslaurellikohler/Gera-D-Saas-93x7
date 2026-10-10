@@ -6,7 +6,7 @@ FROM python:3.12-slim
 # Libs nativas exigidas pelo WeasyPrint (Pango/Cairo/GDK-Pixbuf) para renderizar os PDFs
 # executivo/detalhado — sem isso o import de gera_d_engine.rendering falha em runtime.
 # ffmpeg é usado por app/engine_integration/audio_chunking.py para contornar o limite de
-# 25MB por arquivo da API Whisper em uploads de áudio/vídeo grandes (ver ROADMAP.md).
+# 25MB por arquivo da API Whisper em uploads de áudio/vídeo grandes.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
