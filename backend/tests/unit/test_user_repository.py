@@ -55,7 +55,7 @@ def test_list_filters_by_role(db_session):
 
     admins = repo.list(role=UserRole.ADMIN)
 
-    assert [u.email for u in admins] == ["admin@example.com"]
+    assert [row.User.email for row in admins] == ["admin@example.com"]
 
 
 def test_list_filters_by_status(db_session):
@@ -65,7 +65,7 @@ def test_list_filters_by_status(db_session):
 
     inactive = repo.list(status=UserStatus.INACTIVE)
 
-    assert [u.email for u in inactive] == ["inactive@example.com"]
+    assert [row.User.email for row in inactive] == ["inactive@example.com"]
 
 
 def test_list_filters_by_search_matches_name_or_email(db_session):
@@ -76,8 +76,8 @@ def test_list_filters_by_search_matches_name_or_email(db_session):
     by_name = repo.list(search="ana")
     by_email = repo.list(search="bruno@example")
 
-    assert [u.email for u in by_name] == ["ana@example.com"]
-    assert [u.email for u in by_email] == ["bruno@example.com"]
+    assert [row.User.email for row in by_name] == ["ana@example.com"]
+    assert [row.User.email for row in by_email] == ["bruno@example.com"]
 
 
 def test_list_combines_filters_and_returns_empty_when_no_match(db_session):
@@ -96,7 +96,65 @@ def test_list_orders_by_name(db_session):
 
     result = repo.list()
 
-    assert [u.name for u in result] == ["Ana", "Zeca"]
+    assert [row.User.name for row in result] == ["Ana", "Zeca"]
+
+
+def test_list_includes_manager_name_for_colaborador(db_session):
+    repo = UserRepository(db_session)
+    gestor = repo.create(_new_user(name="Gestor", email="gestor4@example.com", role=UserRole.GESTOR))
+    repo.create(
+        _new_user(
+            name="Colaborador", email="colab4@example.com", role=UserRole.COLABORADOR, manager_id=gestor.id
+        )
+    )
+    repo.create(_new_user(name="Sem gestor", email="solta4@example.com", role=UserRole.COLABORADOR))
+
+    result = {row.User.email: row.manager_name for row in repo.list()}
+
+    assert result["colab4@example.com"] == "Gestor"
+    assert result["solta4@example.com"] is None
+
+
+def test_list_includes_team_size_for_gestor(db_session):
+    repo = UserRepository(db_session)
+    gestor = repo.create(_new_user(name="Gestor", email="gestor5@example.com", role=UserRole.GESTOR))
+    repo.create(_new_user(name="Gestor Vazio", email="gestor6@example.com", role=UserRole.GESTOR))
+    repo.create(
+        _new_user(
+            name="Colaborador1", email="colab5@example.com", role=UserRole.COLABORADOR, manager_id=gestor.id
+        )
+    )
+    repo.create(
+        _new_user(
+            name="Colaborador2", email="colab6@example.com", role=UserRole.COLABORADOR, manager_id=gestor.id
+        )
+    )
+
+    result = {row.User.email: row.team_size for row in repo.list()}
+
+    assert result["gestor5@example.com"] == 2
+    assert result["gestor6@example.com"] == 0
+    assert result["colab5@example.com"] == 0
+
+
+def test_list_filters_by_manager_id(db_session):
+    repo = UserRepository(db_session)
+    gestor1 = repo.create(_new_user(name="Gestor1", email="gestor7@example.com", role=UserRole.GESTOR))
+    gestor2 = repo.create(_new_user(name="Gestor2", email="gestor8@example.com", role=UserRole.GESTOR))
+    repo.create(
+        _new_user(
+            name="Colaborador1", email="colab7@example.com", role=UserRole.COLABORADOR, manager_id=gestor1.id
+        )
+    )
+    repo.create(
+        _new_user(
+            name="Colaborador2", email="colab8@example.com", role=UserRole.COLABORADOR, manager_id=gestor2.id
+        )
+    )
+
+    result = repo.list(manager_id=gestor1.id)
+
+    assert [row.User.email for row in result] == ["colab7@example.com"]
 
 
 def test_list_subordinates_returns_only_direct_reports(db_session):

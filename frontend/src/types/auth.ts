@@ -8,6 +8,8 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   manager_id: string | null;
+  manager_name?: string | null;
+  team_size?: number | null;
   created_at: string;
   last_login_at: string | null;
 }

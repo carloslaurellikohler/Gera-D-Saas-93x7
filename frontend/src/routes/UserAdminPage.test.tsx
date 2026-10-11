@@ -11,6 +11,21 @@ import * as usersApi from "../api/users";
 import { ApiError } from "../api/client";
 import type { User } from "../types/auth";
 
+function mockListUsers(users: User[]) {
+  return vi.spyOn(usersApi, "listUsers").mockImplementation(async (filters = {}) => {
+    return users.filter((u) => {
+      if (filters.role && u.role !== filters.role) return false;
+      if (filters.status && u.status !== filters.status) return false;
+      if (filters.manager_id && u.manager_id !== filters.manager_id) return false;
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        if (!u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  });
+}
+
 function renderPage() {
   const queryClient = new QueryClient();
   return render(
@@ -55,7 +70,7 @@ beforeEach(() => {
 
 describe("UserAdminPage", () => {
   it("renders the user list from the API", async () => {
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    mockListUsers([ADMIN, OTHER_USER]);
 
     renderPage();
 
@@ -64,7 +79,7 @@ describe("UserAdminPage", () => {
   });
 
   it("shows an empty state when there are no users matching the filters", async () => {
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([]);
+    mockListUsers([]);
 
     renderPage();
 
@@ -73,7 +88,7 @@ describe("UserAdminPage", () => {
 
   it("creates a user from the inline form", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+    mockListUsers([ADMIN]);
     const createSpy = vi.spyOn(usersApi, "createUser").mockResolvedValue(OTHER_USER);
 
     renderPage();
@@ -96,7 +111,7 @@ describe("UserAdminPage", () => {
 
   it("rejects creating a user with a short password", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+    mockListUsers([ADMIN]);
     const createSpy = vi.spyOn(usersApi, "createUser").mockResolvedValue(OTHER_USER);
 
     renderPage();
@@ -114,7 +129,7 @@ describe("UserAdminPage", () => {
 
   it("shows a friendly error when creating a user with a duplicate email", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+    mockListUsers([ADMIN]);
     vi
       .spyOn(usersApi, "createUser")
       .mockRejectedValue(new ApiError(409, "Já existe um usuário com este e-mail."));
@@ -133,7 +148,7 @@ describe("UserAdminPage", () => {
 
   it("opens the edit form pre-filled and submits the update payload", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    mockListUsers([ADMIN, OTHER_USER]);
     const updateSpy = vi.spyOn(usersApi, "updateUser").mockResolvedValue(OTHER_USER);
 
     renderPage();
@@ -156,7 +171,7 @@ describe("UserAdminPage", () => {
 
   it("deactivates another user after confirmation", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    mockListUsers([ADMIN, OTHER_USER]);
     const deactivateSpy = vi.spyOn(usersApi, "deactivateUser").mockResolvedValue({
       ...OTHER_USER,
       status: "INACTIVE",
@@ -174,7 +189,7 @@ describe("UserAdminPage", () => {
 
   it("does not deactivate when confirmation is cancelled", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    mockListUsers([ADMIN, OTHER_USER]);
     const deactivateSpy = vi.spyOn(usersApi, "deactivateUser").mockResolvedValue({
       ...OTHER_USER,
       status: "INACTIVE",
@@ -191,7 +206,7 @@ describe("UserAdminPage", () => {
   });
 
   it("disables self-deactivation for the logged in admin", async () => {
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    mockListUsers([ADMIN, OTHER_USER]);
 
     renderPage();
     await screen.findByText("Ana Souza");
@@ -202,7 +217,7 @@ describe("UserAdminPage", () => {
 
   it("resets another user's password from the modal", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    mockListUsers([ADMIN, OTHER_USER]);
     const resetSpy = vi.spyOn(usersApi, "resetUserPassword").mockResolvedValue(OTHER_USER);
 
     renderPage();
@@ -221,7 +236,7 @@ describe("UserAdminPage", () => {
 
   it("rejects resetting a password shorter than 8 characters", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, OTHER_USER]);
+    mockListUsers([ADMIN, OTHER_USER]);
     const resetSpy = vi.spyOn(usersApi, "resetUserPassword").mockResolvedValue(OTHER_USER);
 
     renderPage();
@@ -237,7 +252,7 @@ describe("UserAdminPage", () => {
   });
 
   it("filters the list by role when a pill is clicked", async () => {
-    const listSpy = vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+    const listSpy = mockListUsers([ADMIN]);
     const user = userEvent.setup();
 
     renderPage();
@@ -251,7 +266,7 @@ describe("UserAdminPage", () => {
   });
 
   it("filters the list by GESTOR role when the GESTOR pill is clicked", async () => {
-    const listSpy = vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+    const listSpy = mockListUsers([ADMIN]);
     const user = userEvent.setup();
 
     renderPage();
@@ -267,7 +282,7 @@ describe("UserAdminPage", () => {
   it("creates a COLABORADOR with the selected manager", async () => {
     const GESTOR: User = { ...ADMIN, id: "gestor-1", name: "Gestora Teste", role: "GESTOR" };
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN, GESTOR]);
+    mockListUsers([ADMIN, GESTOR]);
     const createSpy = vi.spyOn(usersApi, "createUser").mockResolvedValue(OTHER_USER);
 
     renderPage();
@@ -291,7 +306,7 @@ describe("UserAdminPage", () => {
 
   it("hides the manager field when the role is not COLABORADOR", async () => {
     const user = userEvent.setup();
-    vi.spyOn(usersApi, "listUsers").mockResolvedValue([ADMIN]);
+    mockListUsers([ADMIN]);
 
     renderPage();
     await screen.findByText("Admin Teste");
@@ -301,5 +316,54 @@ describe("UserAdminPage", () => {
 
     await user.selectOptions(screen.getByLabelText("Papel"), "ADMIN");
     expect(screen.queryByLabelText("Reporta para")).not.toBeInTheDocument();
+  });
+
+  it("shows the colaborador's manager name in the Gestor column", async () => {
+    const GESTOR: User = { ...ADMIN, id: "gestor-1", name: "Gestora Teste", role: "GESTOR" };
+    const COLABORADOR_COM_GESTOR: User = {
+      ...OTHER_USER,
+      manager_id: "gestor-1",
+      manager_name: "Gestora Teste",
+    };
+    mockListUsers([ADMIN, GESTOR, COLABORADOR_COM_GESTOR]);
+
+    renderPage();
+
+    const nameEl = await screen.findByText("Ana Souza");
+    const row = nameEl.closest<HTMLElement>(".data-table-row");
+    expect(within(row!).getByText("Gestora Teste")).toBeInTheDocument();
+  });
+
+  it("shows a dash when the user has no manager", async () => {
+    mockListUsers([ADMIN, OTHER_USER]);
+
+    renderPage();
+
+    await screen.findByText("Ana Souza");
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("shows the team size on the GESTOR's own row", async () => {
+    const GESTOR: User = { ...ADMIN, id: "gestor-1", name: "Gestora Teste", role: "GESTOR", team_size: 3 };
+    mockListUsers([ADMIN, GESTOR]);
+
+    renderPage();
+
+    expect(await screen.findByText("3 colaboradores")).toBeInTheDocument();
+  });
+
+  it("filters the list by manager when a gestor is selected in the filter dropdown", async () => {
+    const GESTOR: User = { ...ADMIN, id: "gestor-1", name: "Gestora Teste", role: "GESTOR" };
+    const listSpy = mockListUsers([ADMIN, GESTOR]);
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByText("Admin Teste");
+
+    await user.selectOptions(screen.getByLabelText("Filtrar por gestor"), "gestor-1");
+
+    expect(listSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ manager_id: "gestor-1" }),
+    );
   });
 });

@@ -8,6 +8,7 @@ import uuid
 from app.core.security import hash_password
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.user_repository import UserRepository
+from app.schemas.user import UserResponse
 
 
 class UserNotFoundError(ValueError):
@@ -51,8 +52,24 @@ class UserService:
         role: UserRole | None = None,
         status: UserStatus | None = None,
         search: str | None = None,
-    ) -> list[User]:
-        return self.repo.list(role=role, status=status, search=search)
+        manager_id: uuid.UUID | None = None,
+    ) -> list[UserResponse]:
+        rows = self.repo.list(role=role, status=status, search=search, manager_id=manager_id)
+        return [
+            UserResponse(
+                id=row.User.id,
+                name=row.User.name,
+                email=row.User.email,
+                role=row.User.role,
+                status=row.User.status,
+                manager_id=row.User.manager_id,
+                manager_name=row.manager_name,
+                team_size=row.team_size if row.User.role == UserRole.GESTOR else None,
+                created_at=row.User.created_at,
+                last_login_at=row.User.last_login_at,
+            )
+            for row in rows
+        ]
 
     def list_subordinates(self, manager_id: uuid.UUID) -> list[User]:
         return self.repo.list_subordinates(manager_id)

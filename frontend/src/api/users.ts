@@ -12,6 +12,7 @@ export function listUsers(filters: UserFilters = {}) {
   if (filters.role) params.set("role", filters.role);
   if (filters.status) params.set("status", filters.status);
   if (filters.search) params.set("search", filters.search);
+  if (filters.manager_id) params.set("manager_id", filters.manager_id);
   const query = params.toString();
   return apiGet<User[]>(`/users${query ? `?${query}` : ""}`);
 }

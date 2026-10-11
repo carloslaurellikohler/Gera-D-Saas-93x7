@@ -27,10 +27,11 @@ def list_users(
     role: UserRole | None = Query(None),
     status: UserStatus | None = Query(None),
     search: str | None = Query(None),
+    manager_id: uuid.UUID | None = Query(None),
     service: UserService = Depends(get_user_service),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    return service.list_users(role=role, status=status, search=search)
+    return service.list_users(role=role, status=status, search=search, manager_id=manager_id)
 
 
 @router.get("/me/team", response_model=list[UserResponse])

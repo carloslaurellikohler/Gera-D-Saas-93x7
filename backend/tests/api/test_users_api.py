@@ -381,3 +381,30 @@ def test_desativar_gestor_com_equipe_retorna_409(admin_client, client_factory):
     response = admin_client.post(f"/api/v1/users/{gestor.id}/deactivate")
 
     assert response.status_code == 409
+
+
+def test_list_users_as_admin_includes_manager_hierarchy(admin_client, client_factory):
+    _, gestor = client_factory(role=UserRole.GESTOR)
+    client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+
+    response = admin_client.get("/api/v1/users")
+
+    assert response.status_code == 200
+    body = {u["id"]: u for u in response.json()}
+    assert body[str(gestor.id)]["team_size"] == 1
+    assert body[str(gestor.id)]["manager_name"] is None
+    colaborador = next(u for u in body.values() if u["manager_id"] == str(gestor.id))
+    assert colaborador["manager_name"] == gestor.name
+
+
+def test_list_users_filters_by_manager_id(admin_client, client_factory):
+    _, gestor1 = client_factory(role=UserRole.GESTOR)
+    _, gestor2 = client_factory(role=UserRole.GESTOR)
+    _, colaborador1 = client_factory(role=UserRole.COLABORADOR, manager_id=gestor1.id)
+    client_factory(role=UserRole.COLABORADOR, manager_id=gestor2.id)
+
+    response = admin_client.get(f"/api/v1/users?manager_id={gestor1.id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [u["id"] for u in body] == [str(colaborador1.id)]

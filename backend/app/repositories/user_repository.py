@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Row, func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.models.user import User, UserRole, UserStatus
 
@@ -36,8 +36,28 @@ class UserRepository:
         role: UserRole | None = None,
         status: UserStatus | None = None,
         search: str | None = None,
-    ) -> list[User]:
-        stmt = select(User).order_by(User.name.asc())
+        manager_id: uuid.UUID | None = None,
+    ) -> list[Row]:
+        """Lista usuários trazendo o nome do gestor (self-join) e, para quem é
+        GESTOR, o tamanho da equipe (subquery agregada) — ambos em uma única
+        query, sem N+1."""
+        manager = aliased(User)
+        team_sizes = (
+            select(User.manager_id.label("manager_id"), func.count().label("team_size"))
+            .where(User.manager_id.isnot(None))
+            .group_by(User.manager_id)
+            .subquery()
+        )
+        stmt = (
+            select(
+                User,
+                manager.name.label("manager_name"),
+                func.coalesce(team_sizes.c.team_size, 0).label("team_size"),
+            )
+            .outerjoin(manager, manager.id == User.manager_id)
+            .outerjoin(team_sizes, team_sizes.c.manager_id == User.id)
+            .order_by(User.name.asc())
+        )
         if role is not None:
             stmt = stmt.where(User.role == role)
         if status is not None:
@@ -47,7 +67,9 @@ class UserRepository:
             stmt = stmt.where(
                 or_(func.lower(User.name).like(pattern), func.lower(User.email).like(pattern))
             )
-        return list(self.db.execute(stmt).scalars().all())
+        if manager_id is not None:
+            stmt = stmt.where(User.manager_id == manager_id)
+        return list(self.db.execute(stmt).all())
 
     def update(self, user_id: uuid.UUID, **fields: Any) -> User:
         user = self.get(user_id)

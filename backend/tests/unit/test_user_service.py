@@ -201,6 +201,52 @@ def test_despromover_gestor_com_equipe_rejeitado(service):
         service.update_user(gestor.id, name=gestor.name, email=gestor.email, role=UserRole.COLABORADOR)
 
 
+def test_list_users_returns_manager_name_and_team_size(service):
+    gestor = service.create_user(
+        name="Gestor", email="gestor9@example.com", password="correct-password", role=UserRole.GESTOR
+    )
+    service.create_user(
+        name="Ana Souza",
+        email="ana9@example.com",
+        password="correct-password",
+        role=UserRole.COLABORADOR,
+        manager_id=gestor.id,
+    )
+
+    result = {u.email: u for u in service.list_users()}
+
+    assert result["ana9@example.com"].manager_name == "Gestor"
+    assert result["gestor9@example.com"].team_size == 1
+    assert result["gestor9@example.com"].manager_name is None
+
+
+def test_list_users_filters_by_manager_id(service):
+    gestor1 = service.create_user(
+        name="Gestor1", email="gestor10@example.com", password="correct-password", role=UserRole.GESTOR
+    )
+    gestor2 = service.create_user(
+        name="Gestor2", email="gestor11@example.com", password="correct-password", role=UserRole.GESTOR
+    )
+    service.create_user(
+        name="Colaborador1",
+        email="colab10@example.com",
+        password="correct-password",
+        role=UserRole.COLABORADOR,
+        manager_id=gestor1.id,
+    )
+    service.create_user(
+        name="Colaborador2",
+        email="colab11@example.com",
+        password="correct-password",
+        role=UserRole.COLABORADOR,
+        manager_id=gestor2.id,
+    )
+
+    result = service.list_users(manager_id=gestor1.id)
+
+    assert [u.email for u in result] == ["colab10@example.com"]
+
+
 def test_desativar_gestor_com_equipe_rejeitado(service):
     admin = service.create_user(
         name="Admin", email="admin3@example.com", password="correct-password", role=UserRole.ADMIN

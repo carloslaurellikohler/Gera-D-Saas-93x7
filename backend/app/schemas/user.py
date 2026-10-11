@@ -85,5 +85,7 @@ class UserResponse(BaseModel):
     role: UserRole
     status: UserStatus
     manager_id: uuid.UUID | None
+    manager_name: str | None = None
+    team_size: int | None = None
     created_at: datetime
     last_login_at: datetime | None

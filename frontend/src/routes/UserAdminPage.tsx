@@ -20,6 +20,14 @@ function initialsOf(name: string): string {
   return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
 }
 
+function managerCellText(u: User): string {
+  if (u.role === "GESTOR") {
+    const n = u.team_size ?? 0;
+    return `${n} colaborador${n === 1 ? "" : "es"}`;
+  }
+  return u.manager_name ?? "—";
+}
+
 const iconButtonStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -48,6 +56,7 @@ export default function UserAdminPage() {
   const confirm = useConfirm();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
+  const [managerFilter, setManagerFilter] = useState("");
   const [formMode, setFormMode] = useState<UserFormMode | null>(null);
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -56,7 +65,9 @@ export default function UserAdminPage() {
     role: ROLE_FILTER_KEYS.includes(filter) ? (filter as "ADMIN" | "GESTOR" | "COLABORADOR") : undefined,
     status: filter === "INACTIVE" ? "INACTIVE" : undefined,
     search: search.trim() || undefined,
+    manager_id: managerFilter || undefined,
   });
+  const gestores = useUsers({ role: "GESTOR", status: "ACTIVE" });
   const activateUser = useActivateUser();
   const deactivateUser = useDeactivateUser();
 
@@ -151,6 +162,22 @@ export default function UserAdminPage() {
             {f.label}
           </button>
         ))}
+        <span className="search-field">
+          <select
+            aria-label="Filtrar por gestor"
+            value={managerFilter}
+            onChange={(e) => setManagerFilter(e.target.value)}
+            style={{ border: "none", outline: "none", background: "none", font: "inherit" }}
+          >
+            <option value="">Todos os gestores</option>
+            {(gestores.data ?? []).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <Icon name="expand_more" size={20} />
+        </span>
       </div>
 
       {users.isLoading && <p className="page-subtitle">Carregando...</p>}
@@ -168,10 +195,11 @@ export default function UserAdminPage() {
         <div className="data-table">
           <div
             className="data-table-row data-table-head"
-            style={{ gridTemplateColumns: "minmax(0,1.6fr) 130px 150px 140px 120px" }}
+            style={{ gridTemplateColumns: "minmax(0,1.4fr) 120px minmax(0,1fr) 110px 140px 120px" }}
           >
             <span>Usuário</span>
             <span>Papel</span>
+            <span>Gestor</span>
             <span>Status</span>
             <span>Último acesso</span>
             <span />
@@ -184,7 +212,7 @@ export default function UserAdminPage() {
                 key={u.id}
                 className="data-table-row"
                 style={{
-                  gridTemplateColumns: "minmax(0,1.6fr) 130px 150px 140px 120px",
+                  gridTemplateColumns: "minmax(0,1.4fr) 120px minmax(0,1fr) 110px 140px 120px",
                   opacity: u.status === "INACTIVE" ? 0.6 : 1,
                 }}
               >
@@ -199,10 +227,11 @@ export default function UserAdminPage() {
                 </span>
                 <span
                   className={`ui-sidebar-role ui-sidebar-role-${ROLE_BADGE_CLASS[u.role]}`}
-                  style={{ justifySelf: "start" }}
+                  style={{ justifySelf: "start", alignSelf: "center" }}
                 >
                   {u.role}
                 </span>
+                <span className="page-subtitle">{managerCellText(u)}</span>
                 <span>{u.status === "ACTIVE" ? "Ativo" : "Inativo"}</span>
                 <span className="page-subtitle">{formatDate(u.last_login_at)}</span>
                 <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>

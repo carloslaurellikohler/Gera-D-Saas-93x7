@@ -23,4 +23,5 @@ export interface UserFilters {
   role?: UserRole;
   status?: UserStatus;
   search?: string;
+  manager_id?: string;
 }
