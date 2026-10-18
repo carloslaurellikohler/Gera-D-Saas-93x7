@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     ASSISTANT_CHUNK_SIZE: int = 1200
     ASSISTANT_CHUNK_OVERLAP: int = 200
 
+    # Modelo/temperatura do pipeline de análise. Antes só a engine lia isso, direto do
+    # os.getenv (gera_d_engine.config.Settings.load) — com `extra="ignore"` as duas vars
+    # eram descartadas aqui. Declarar os campos é o que dá ao backend um fallback explícito
+    # e testável quando a linha de runtime_settings não existe.
+    OPENAI_MODEL: str = "gpt-6-luna"
+    OPENAI_TEMPERATURE: float = 0.2
+
     # --- FinAI: observabilidade de custo de IA ---
     # Preço por modelo, orçamento mensal e taxa USD→BRL NÃO vivem aqui: são editáveis pelo
     # ADMIN na tela, no banco (ai_model_prices / ai_cost_budgets / ai_cost_settings). Aqui
@@ -62,6 +69,15 @@ class Settings(BaseSettings):
     # captura é desligada inteira sem precisar reverter código.
     AI_COST_TRACKING_ENABLED: bool = True
     AI_COST_FFPROBE_TIMEOUT_SECONDS: int = 60
+
+    # --- Configuração editável em runtime (tela /configuracoes) ---
+    # Seis valores acima/abaixo — DAILY_ANALYSIS_LIMIT_PER_OWNER, ASSISTANT_DAILY_MESSAGE_LIMIT,
+    # OPENAI_MODEL/OPENAI_TEMPERATURE e ASSISTANT_CHAT_MODEL/ASSISTANT_CHAT_TEMPERATURE — vivem
+    # no Postgres (tabela runtime_settings) e são editáveis pelo ADMIN sem rebuild.
+    # O que está AQUI é BOOTSTRAP: a migration de seed copia o ambiente para a linha única e, a
+    # partir dali, só a tela manda — mudar a env var num deploy já migrado não tem efeito. Serve
+    # de fallback apenas se a linha não existir (banco novo, testes com create_all).
+    # Resolução num único ponto: app/services/runtime_settings_service.py::build_effective_settings.
 
     # Limitador diário de análises por colaborador (owner_id) — controle de custo/fluxo.
     # ADMIN é isento quando sobe para si mesmo; GESTOR nunca é isento (o limite é do

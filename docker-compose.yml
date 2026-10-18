@@ -43,14 +43,20 @@ services:
       TASK_SOFT_TIME_LIMIT_SECONDS: ${TASK_SOFT_TIME_LIMIT_SECONDS:-3300}
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:5173"]}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
-      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
       AI_COST_TRACKING_ENABLED: ${AI_COST_TRACKING_ENABLED:-true}
       AI_COST_FFPROBE_TIMEOUT_SECONDS: ${AI_COST_FFPROBE_TIMEOUT_SECONDS:-60}
+      ASSISTANT_EMBEDDING_MODEL: ${ASSISTANT_EMBEDDING_MODEL:-text-embedding-3-small}
+      # --- Bootstrap da tela /configuracoes ---
+      # Estes 6 valores são copiados para a tabela runtime_settings pela migration de seed,
+      # na primeira subida. Depois disso quem manda é a tela: alterar aqui não tem efeito em
+      # banco já migrado. Este container precisa recebê-los porque é ele que roda o
+      # `alembic upgrade head` (ver command acima), ou seja, é ele quem semeia.
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
       ASSISTANT_CHAT_MODEL: ${ASSISTANT_CHAT_MODEL:-gpt-6-luna}
       ASSISTANT_CHAT_TEMPERATURE: ${ASSISTANT_CHAT_TEMPERATURE:-0.3}
-      ASSISTANT_EMBEDDING_MODEL: ${ASSISTANT_EMBEDDING_MODEL:-text-embedding-3-small}
       ASSISTANT_DAILY_MESSAGE_LIMIT: ${ASSISTANT_DAILY_MESSAGE_LIMIT:-30}
+      DAILY_ANALYSIS_LIMIT_PER_OWNER: ${DAILY_ANALYSIS_LIMIT_PER_OWNER:-4}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
@@ -86,8 +92,12 @@ services:
       TASK_TIME_LIMIT_SECONDS: ${TASK_TIME_LIMIT_SECONDS:-3600}
       TASK_SOFT_TIME_LIMIT_SECONDS: ${TASK_SOFT_TIME_LIMIT_SECONDS:-3300}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # OPENAI_MODEL/OPENAI_TEMPERATURE aqui são apenas fallback: o modelo efetivo da análise
+      # vem da tabela runtime_settings, lida a cada job (ver workers/tasks.py e
+      # engine_integration/engine_settings_builder.py). Só valem se a linha não existir.
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
       OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
+      DAILY_ANALYSIS_LIMIT_PER_OWNER: ${DAILY_ANALYSIS_LIMIT_PER_OWNER:-4}
       AI_COST_TRACKING_ENABLED: ${AI_COST_TRACKING_ENABLED:-true}
       AI_COST_FFPROBE_TIMEOUT_SECONDS: ${AI_COST_FFPROBE_TIMEOUT_SECONDS:-60}
     volumes:

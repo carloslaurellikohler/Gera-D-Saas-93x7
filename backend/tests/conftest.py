@@ -20,6 +20,9 @@ from app.models import methodology as _methodology_models  # noqa: F401 — regi
 from app.models import (  # noqa: F401 — registra o modelo em Base.metadata
     methodology_chunk as _methodology_chunk_models,
 )
+from app.models import (  # noqa: F401 — registra o modelo em Base.metadata
+    runtime_settings as _runtime_settings_models,
+)
 from app.models import user as _user_models  # noqa: F401 — registra o modelo em Base.metadata
 
 TEST_DB_NAME = "gerad_test"

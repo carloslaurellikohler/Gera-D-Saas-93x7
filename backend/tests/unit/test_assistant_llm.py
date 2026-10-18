@@ -3,16 +3,16 @@ from __future__ import annotations
 import pytest
 
 from app.core.config import Settings
-from app.services.assistant_llm import _is_reasoning_model, build_assistant_chat_model
+from app.services.assistant_llm import build_assistant_chat_model, is_reasoning_model
 
 
 def test_is_reasoning_model_matches_gpt6_prefix():
-    assert _is_reasoning_model("gpt-6-luna") is True
-    assert _is_reasoning_model("gpt-6-sol") is True
+    assert is_reasoning_model("gpt-6-luna") is True
+    assert is_reasoning_model("gpt-6-sol") is True
 
 
 def test_is_reasoning_model_does_not_match_gpt4():
-    assert _is_reasoning_model("gpt-4.1") is False
+    assert is_reasoning_model("gpt-4.1") is False
 
 
 def test_build_assistant_chat_model_requires_api_key():

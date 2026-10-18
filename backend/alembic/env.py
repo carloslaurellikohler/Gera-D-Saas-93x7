@@ -15,6 +15,7 @@ from app.models import learning_path  # noqa: F401 — garante que o modelo é r
 from app.models import learning_path_enrollment  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 from app.models import methodology  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 from app.models import methodology_chunk  # noqa: F401 — garante que o modelo é registrado em Base.metadata
+from app.models import runtime_settings  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 from app.models import user  # noqa: F401 — garante que o modelo é registrado em Base.metadata
 
 # this is the Alembic Config object, which provides

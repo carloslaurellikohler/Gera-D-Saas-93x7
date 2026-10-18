@@ -12,6 +12,7 @@ import AssistantPage from "./routes/AssistantPage";
 import AdminDashboardPage from "./routes/AdminDashboardPage";
 import AiCostPage from "./routes/AiCostPage";
 import CalibrationPage from "./routes/CalibrationPage";
+import SettingsPage from "./routes/SettingsPage";
 import UserAdminPage from "./routes/UserAdminPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import RequireRole from "./components/auth/RequireRole";
@@ -132,6 +133,16 @@ function App() {
             <AuthenticatedShell>
               <RequireRole allow={["ADMIN"]}>
                 <AiCostPage />
+              </RequireRole>
+            </AuthenticatedShell>
+          }
+        />
+        <Route
+          path="/configuracoes"
+          element={
+            <AuthenticatedShell>
+              <RequireRole allow={["ADMIN"]}>
+                <SettingsPage />
               </RequireRole>
             </AuthenticatedShell>
           }

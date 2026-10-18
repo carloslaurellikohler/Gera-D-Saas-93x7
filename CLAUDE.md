@@ -204,6 +204,49 @@ Custo é `Numeric(18, 10)` e **congelado** na gravação (escala menor zeraria e
 snapshot é o que mantém meses fechados imutáveis). Reprecificar histórico é explícito, via
 `POST /ai-costs/prices/{id}/recalculate`.
 
+### Configuração em runtime (tela /configuracoes)
+
+Terceira aplicação do movimento das Fases 7 e 8: seis valores operacionais saíram do `.env` para
+o Postgres, editáveis pelo ADMIN sem rebuild — os dois limites diários
+(`DAILY_ANALYSIS_LIMIT_PER_OWNER`, `ASSISTANT_DAILY_MESSAGE_LIMIT`) e o modelo+temperatura da
+análise (`OPENAI_MODEL`/`OPENAI_TEMPERATURE`) e do assistente
+(`ASSISTANT_CHAT_MODEL`/`ASSISTANT_CHAT_TEMPERATURE`).
+
+`runtime_settings` é **linha única de ID fixo** (`RUNTIME_SETTINGS_ID`, mesma técnica de
+`AI_COST_SETTINGS_ID`) e **vence o `.env` sempre**. O `.env` só semeia, na migration
+`8fedcfaf1406`, que lê do ambiente e não de literais — um deploy em `gpt-6-sol` continua nele
+depois do upgrade. Mudar a env var em banco já migrado não tem efeito; ela volta a valer só se a
+linha for removida. Auditoria é só do último editor (`updated_at` + `updated_by_id`), sem histórico.
+
+A sobreposição acontece num **único ponto**: `RuntimeSettingsService.build_effective_settings`,
+que devolve um `Settings` novo via `model_copy(update=...)`. É isso que mantém
+`AnalysisService`/`AssistantService` lendo `self.settings.<CAMPO>` sem alteração. `model_copy` não
+valida nem coage: o cast `Decimal`→`float` das temperaturas é obrigatório lá, senão um `Decimal`
+vaza para `ChatOpenAI(temperature=...)`. Entra por `deps.py::get_effective_settings` (nas factories
+de analysis e assistant) e por `workers/tasks.py` — **o worker é quem roda a análise**, então
+precisa ler do banco também. Sem cache, por request/job, igual a `EngineAdapter.from_published`.
+
+O modelo chega à engine por `engine_integration/engine_settings_builder.py` +
+`EngineAdapter.from_published`, que injeta `settings=` no adapter. A **engine fica intocada**
+(`run_pipeline` já aceitava `settings`). Nunca deixar o caminho de produção cair no
+`get_settings()` da engine: ele lê `os.getenv("OPENAI_MODEL")` e reverte a configuração para o
+ambiente do processo em silêncio — mesma advertência que vale para `load_calibration()`. A
+`OPENAI_API_KEY` continua vindo do ambiente: é segredo, não configuração de admin.
+
+O campo de modelo é texto livre, com botão **"Testar modelo"** que faz uma chamada real
+(`services/model_probe.py`: prompt de 1 token, `max_tokens=1`, timeout 10s, `max_retries=0`). Essa
+chamada **não** é contabilizada no FinAI de propósito — `AiUsageFeature` tem 3 valores e um 4º
+exigiria DDL, e reusar `ANALYSIS`/`ASSISTANT` distorceria os KPIs de custo por evento. Trocar o
+modelo faz os eventos novos caírem em `cost_status=NO_PRICE` até cadastrar a vigência em
+`/custos-ia`; a tela avisa e linka. A lista de prefixos de modelo de raciocínio é servida ao
+frontend pelo response (`reasoning_model_prefixes`, de `assistant_llm.py`) para não criar uma
+terceira cópia.
+
+Fora de escopo por decisão: `ASSISTANT_EMBEDDING_MODEL` (trocar quebra o RAG até reindexar —
+`MethodologyChunk.embedding` é `ARRAY(Float)` com similaridade em memória), parâmetros do RAG,
+prompt do assistente e o modelo do Whisper (literal na engine). Não existe `GET /assistant/quota`:
+baixar o limite do assistente só aparece ao usuário no 429.
+
 ### Autorização
 
 JWT em cookie httpOnly (`app/core/security.py`), stateless. `get_current_user` lê o cookie e exige
@@ -219,8 +262,9 @@ list_subordinates` resolve a equipe, validada em `UserService`. `require_role(Us
 protege rotas de equipe; `AnalysisService`/`DashboardService` têm ramos específicos para o GESTOR
 (quadro de equipe).
 
-Cada usuário tem cota diária de análises: `DAILY_ANALYSIS_LIMIT_PER_OWNER` (`app/core/config.py`,
-hoje 4). `AnalysisService.get_daily_quota`/`create_and_store` verificam o uso do dia e levantam
+Cada usuário tem cota diária de análises: `DAILY_ANALYSIS_LIMIT_PER_OWNER` (hoje 4, editável em
+`/configuracoes` — vem de `runtime_settings`, não mais só do env).
+`AnalysisService.get_daily_quota`/`create_and_store` verificam o uso do dia e levantam
 `DailyAnalysisLimitError` quando excedida.
 
 ### Farol (classificação da nota)
@@ -243,7 +287,8 @@ styles/tokens/     design tokens em CSS vars (cores, tipografia, spacing, eleva�
 ```
 
 Rotas em `App.tsx`: tudo dentro de `<ProtectedRoute>` + `AuthenticatedShell` (sidebar); telas
-administrativas (`/admin`, `/calibracao`, `/usuarios`, `/custos-ia`) adicionalmente envolvidas por
+administrativas (`/admin`, `/calibracao`, `/usuarios`, `/custos-ia`, `/configuracoes`)
+adicionalmente envolvidas por
 `<RequireRole allow={["ADMIN"]}>` dentro do próprio `AuthenticatedShell`.
 
 Fluxo para expor um endpoint novo na UI: `api/` → `types/` → `hooks/` → página, nessa ordem.

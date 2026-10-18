@@ -9,7 +9,9 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.engine_integration.adapter import EngineAdapter
 from app.repositories.analysis_repository import AnalysisRepository
+from app.repositories.runtime_settings_repository import RuntimeSettingsRepository
 from app.services.analysis_service import AnalysisService
+from app.services.runtime_settings_service import build_effective_settings
 from app.storage.local_storage import LocalDiskStorage
 from app.workers.celery_app import celery_app
 
@@ -21,7 +23,11 @@ _TRANSIENT_ERRORS = (RateLimitError, APITimeoutError, APIConnectionError)
 
 
 def _build_analysis_service(db) -> AnalysisService:
-    settings = get_settings()
+    # O worker é quem roda a análise, então ele também precisa ler os limites e o modelo do
+    # banco — depender do ambiente do container reverteria a configuração em silêncio (o
+    # compose nem repassa todas as vars para este serviço). A Session já está em mãos, então
+    # não há conexão extra. EngineAdapter.from_published faz a própria leitura da mesma linha.
+    settings = build_effective_settings(get_settings(), RuntimeSettingsRepository(db).get())
     return AnalysisService(
         repo=AnalysisRepository(db),
         storage=LocalDiskStorage(settings.STORAGE_DIR),

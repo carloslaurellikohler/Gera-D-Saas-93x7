@@ -6,7 +6,14 @@ A calibração (Fase 7) vem do Postgres, nunca mais de calibration/v1.yaml — v
 calibration_builder.build_calibration. Nunca reintroduzir
 `gera_d_engine.calibration.load_calibration()` no caminho do backend: isso reverteria a
 migração silenciosamente para o YAML estático com cache (`lru_cache`) potencialmente
-desatualizado."""
+desatualizado.
+
+O **modelo e a temperatura da análise** também vêm do Postgres (tabela runtime_settings,
+editável em /configuracoes) — ver engine_settings_builder.build_engine_settings. Pela mesma
+razão, nunca deixar o caminho de produção cair no `get_settings()` da engine: ele lê
+`os.getenv("OPENAI_MODEL")` e reverteria a configuração para o ambiente do processo em
+silêncio. O parâmetro `settings=None` existe só para teste isolado da engine. A
+`OPENAI_API_KEY` continua vindo do ambiente: é segredo, não configuração de admin."""
 
 from __future__ import annotations
 
@@ -14,6 +21,7 @@ import uuid
 from pathlib import Path
 
 from gera_d_engine.calibration import Calibration
+from gera_d_engine.config import Settings as EngineSettings
 from gera_d_engine.config import get_settings
 from gera_d_engine.ingestion import load_transcript
 from gera_d_engine.pipeline import run_pipeline
@@ -24,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.engine_integration.audio_chunking import load_transcript_chunked, needs_chunking
 from app.engine_integration.calibration_builder import build_calibration
+from app.engine_integration.engine_settings_builder import build_engine_settings
 
 
 class NoPublishedMethodologyError(RuntimeError):
@@ -36,21 +45,36 @@ class NoPublishedMethodologyError(RuntimeError):
 
 
 class EngineAdapter:
-    def __init__(self, calibration: Calibration, methodology_id: uuid.UUID) -> None:
-        self._settings = get_settings()
+    def __init__(
+        self,
+        calibration: Calibration,
+        methodology_id: uuid.UUID,
+        settings: EngineSettings | None = None,
+    ) -> None:
+        # `settings=None` cai no get_settings() da engine (os.getenv). O caminho de produção
+        # sempre injeta — ver from_published e a docstring do módulo.
+        self._settings = settings or get_settings()
         self._calibration = calibration
         self._methodology_id = methodology_id
 
     @classmethod
     def from_published(cls, db: Session) -> "EngineAdapter":
-        # Import local para evitar import circular (methodology_repository não precisa
-        # conhecer engine_integration).
+        # Imports locais para evitar import circular (os repositories não precisam conhecer
+        # engine_integration).
+        from app.core.config import get_settings as get_app_settings
         from app.repositories.methodology_repository import MethodologyRepository
+        from app.repositories.runtime_settings_repository import RuntimeSettingsRepository
 
         methodology = MethodologyRepository(db).get_published()
         if methodology is None:
             raise NoPublishedMethodologyError()
-        return cls(calibration=build_calibration(methodology), methodology_id=methodology.id)
+        return cls(
+            calibration=build_calibration(methodology),
+            methodology_id=methodology.id,
+            settings=build_engine_settings(
+                RuntimeSettingsRepository(db).get(), get_app_settings()
+            ),
+        )
 
     def load_transcript(self, file_path: Path) -> Transcript:
         if needs_chunking(file_path):

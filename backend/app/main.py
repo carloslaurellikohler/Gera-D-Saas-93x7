@@ -14,6 +14,7 @@ from app.api.routes import (
     learning_paths,
     methodology,
     metrics,
+    runtime_settings,
     users,
 )
 from app.core.config import get_settings
@@ -40,4 +41,5 @@ app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
 app.include_router(learning_paths.router, prefix=settings.API_V1_PREFIX)
 app.include_router(methodology.router, prefix=settings.API_V1_PREFIX)
 app.include_router(metrics.router, prefix=settings.API_V1_PREFIX)
+app.include_router(runtime_settings.router, prefix=settings.API_V1_PREFIX)
 app.include_router(users.router, prefix=settings.API_V1_PREFIX)
