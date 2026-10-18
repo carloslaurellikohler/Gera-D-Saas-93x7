@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAnalyses } from "../hooks/useAnalyses";
 import { useDashboardStats } from "../hooks/useDashboardStats";
+import { useTeamMembers } from "../hooks/useTeamMembers";
+import { useUsers } from "../hooks/useUsers";
 import { formatDate, formatDurationSeconds } from "../lib/format";
 import StatusBadge from "../components/ui/StatusBadge";
 import BoardTable from "../components/ui/BoardTable";
@@ -37,14 +39,29 @@ function initialsOf(name: string): string {
 export default function DashboardPage() {
   const { hasRole } = useAuth();
   const isGestor = hasRole("GESTOR");
-  const showOwnerColumn = hasRole("ADMIN", "GESTOR");
+  const isAdmin = hasRole("ADMIN");
+  const showOwnerColumn = isAdmin || isGestor;
   const gridTemplateColumns = showOwnerColumn
-    ? "minmax(0,1.1fr) minmax(0,0.9fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px"
+    ? "minmax(0,0.9fr) minmax(0,1.1fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px"
     : "minmax(0,1.3fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px";
-  const { data, isLoading, isError } = useAnalyses();
-  const { data: stats } = useDashboardStats();
+
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [search, setSearch] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const team = useTeamMembers();
+  const activeUsers = useUsers({ status: "ACTIVE" }, { enabled: isAdmin });
+  const colaboradorOptions = isGestor ? (team.data ?? []) : (activeUsers.data ?? []);
+
+  const { data, isLoading, isError } = useAnalyses({
+    participant_name: search.trim() || undefined,
+    owner_id: ownerFilter || undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+  });
+  const { data: stats } = useDashboardStats();
 
   const statsTotalVolume = useMemo(
     () => stats?.volume_by_status.reduce((sum, v) => sum + v.count, 0) ?? 0,
@@ -77,10 +94,10 @@ export default function DashboardPage() {
 
   const visibleItems = useMemo(() => {
     const items = data?.items ?? [];
-    return items
-      .filter((i) => matchesFilter(i, filter))
-      .filter((i) => i.participant_name.toLowerCase().includes(search.trim().toLowerCase()));
-  }, [data, filter, search]);
+    return items.filter((i) => matchesFilter(i, filter));
+  }, [data, filter]);
+
+  const hasActiveFilters = Boolean(search.trim() || ownerFilter || dateFrom || dateTo);
 
   return (
     <div>
@@ -135,7 +152,7 @@ export default function DashboardPage() {
       {isLoading && <p className="page-subtitle">Carregando...</p>}
       {isError && <p className="error-text">Não foi possível carregar as análises.</p>}
 
-      {!isLoading && data && data.items.length === 0 && (
+      {!isLoading && data && data.items.length === 0 && !hasActiveFilters && (
         <EmptyState icon="upload_file" title="Nenhuma análise ainda">
           <span className="ui-empty-state-description">
             Envie a transcrição ou a gravação de uma interação comercial para gerar o relatório
@@ -151,10 +168,10 @@ export default function DashboardPage() {
         </EmptyState>
       )}
 
-      {!isLoading && data && data.items.length > 0 && (
+      {!isLoading && data && (data.items.length > 0 || hasActiveFilters) && (
         <>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", margin: "20px 0" }}>
-            <span className="search-field" style={{ width: 260 }}>
+            <span className="search-field" style={{ width: 220 }}>
               <Icon name="search" size={20} />
               <input
                 aria-label="Buscar participante"
@@ -162,6 +179,44 @@ export default function DashboardPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ border: "none", outline: "none", background: "none", font: "inherit", flex: 1 }}
+              />
+            </span>
+            {showOwnerColumn && (
+              <span className="search-field">
+                <select
+                  aria-label="Filtrar por colaborador"
+                  value={ownerFilter}
+                  onChange={(e) => setOwnerFilter(e.target.value)}
+                  style={{ border: "none", outline: "none", background: "none", font: "inherit" }}
+                >
+                  <option value="">Todos os colaboradores</option>
+                  {colaboradorOptions.map((colaborador) => (
+                    <option key={colaborador.id} value={colaborador.id}>
+                      {colaborador.name}
+                    </option>
+                  ))}
+                </select>
+                <Icon name="expand_more" size={20} />
+              </span>
+            )}
+            <span className="search-field">
+              <Icon name="calendar_today" size={18} />
+              <input
+                type="date"
+                aria-label="Data inicial"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                style={{ border: "none", outline: "none", background: "none", font: "inherit" }}
+              />
+              <span style={{ color: "var(--content-tertiary)" }}>até</span>
+              <input
+                type="date"
+                aria-label="Data final"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                style={{ border: "none", outline: "none", background: "none", font: "inherit" }}
               />
             </span>
             <span style={{ width: 1, height: 24, background: "var(--border-primary)" }} />
@@ -185,53 +240,61 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <div className="data-table">
-            <div className="data-table-row data-table-head" style={{ gridTemplateColumns }}>
-              <span>Participante</span>
-              {showOwnerColumn && <span>Colaborador</span>}
-              <span>Objetivo</span>
-              <span>Tempo</span>
-              <span>Data</span>
-              <span>Nota</span>
-              <span>Status</span>
-              <span />
+          {data.items.length === 0 ? (
+            <EmptyState icon="filter_alt_off" title="Nenhuma análise encontrada">
+              <span className="ui-empty-state-description">
+                Ajuste os filtros de colaborador, participante ou período para ver outros resultados.
+              </span>
+            </EmptyState>
+          ) : (
+            <div className="data-table">
+              <div className="data-table-row data-table-head" style={{ gridTemplateColumns }}>
+                {showOwnerColumn && <span>Colaborador</span>}
+                <span>Participante</span>
+                <span>Objetivo</span>
+                <span>Tempo</span>
+                <span>Data</span>
+                <span>Nota</span>
+                <span>Status</span>
+                <span />
+              </div>
+              {visibleItems.map((item) => (
+                <Link
+                  key={item.id}
+                  to={
+                    item.status === "COMPLETED" || item.status === "FAILED"
+                      ? `/analyses/${item.id}`
+                      : `/analyses/${item.id}/processing`
+                  }
+                  className="data-table-row"
+                  style={{ gridTemplateColumns, color: "inherit", textDecoration: "none" }}
+                >
+                  {showOwnerColumn && <span>{item.owner_name ?? "—"}</span>}
+                  <span className="data-table-participant">
+                    <span className="data-table-avatar">{initialsOf(item.participant_name)}</span>
+                    <b style={{ fontWeight: 600 }}>{item.participant_name}</b>
+                  </span>
+                  <span>{item.objective}</span>
+                  <span style={{ color: "var(--content-secondary)" }}>
+                    {formatDurationSeconds(item.duration_seconds)}
+                  </span>
+                  <span style={{ color: "var(--content-secondary)" }}>{formatDate(item.created_at)}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {item.overall_farol_level ? (
+                      <>
+                        <b>{item.overall_score?.toFixed(1) ?? "—"}</b>
+                        <FarolBadge level={toFarolLevel(item.overall_farol_level)} />
+                      </>
+                    ) : (
+                      <span style={{ color: "var(--content-secondary)" }}>—</span>
+                    )}
+                  </span>
+                  <StatusBadge status={item.status} />
+                  <Icon name="chevron_right" size={20} color="var(--content-secondary)" />
+                </Link>
+              ))}
             </div>
-            {visibleItems.map((item) => (
-              <Link
-                key={item.id}
-                to={
-                  item.status === "COMPLETED" || item.status === "FAILED"
-                    ? `/analyses/${item.id}`
-                    : `/analyses/${item.id}/processing`
-                }
-                className="data-table-row"
-                style={{ gridTemplateColumns, color: "inherit", textDecoration: "none" }}
-              >
-                <span className="data-table-participant">
-                  <span className="data-table-avatar">{initialsOf(item.participant_name)}</span>
-                  <b style={{ fontWeight: 600 }}>{item.participant_name}</b>
-                </span>
-                {showOwnerColumn && <span>{item.owner_name ?? "—"}</span>}
-                <span>{item.objective}</span>
-                <span style={{ color: "var(--content-secondary)" }}>
-                  {formatDurationSeconds(item.duration_seconds)}
-                </span>
-                <span style={{ color: "var(--content-secondary)" }}>{formatDate(item.created_at)}</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {item.overall_farol_level ? (
-                    <>
-                      <b>{item.overall_score?.toFixed(1) ?? "—"}</b>
-                      <FarolBadge level={toFarolLevel(item.overall_farol_level)} />
-                    </>
-                  ) : (
-                    <span style={{ color: "var(--content-secondary)" }}>—</span>
-                  )}
-                </span>
-                <StatusBadge status={item.status} />
-                <Icon name="chevron_right" size={20} color="var(--content-secondary)" />
-              </Link>
-            ))}
-          </div>
+          )}
         </>
       )}
     </div>

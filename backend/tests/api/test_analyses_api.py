@@ -161,6 +161,82 @@ def test_list_analyses_filters_by_status(client):
     assert response.json()["total"] == 0
 
 
+def test_list_analyses_filters_by_participant_name(client):
+    _create_analysis(client, participant_name="Ana Souza")
+    _create_analysis(client, participant_name="Bruno Lima")
+
+    response = client.get("/api/v1/analyses", params={"participant_name": "ana"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["participant_name"] == "Ana Souza"
+
+
+def test_list_analyses_filters_by_date_range(client, api_service):
+    import uuid as uuid_module
+    from datetime import date as date_cls, datetime as datetime_cls, timezone as timezone_cls
+
+    inside = _create_analysis(client, participant_name="Ana").json()
+    outside = _create_analysis(client, participant_name="Bruno").json()
+    api_service.repo.update(
+        uuid_module.UUID(inside["id"]), created_at=datetime_cls(2026, 1, 15, 12, 0, tzinfo=timezone_cls.utc)
+    )
+    api_service.repo.update(
+        uuid_module.UUID(outside["id"]), created_at=datetime_cls(2026, 2, 1, 12, 0, tzinfo=timezone_cls.utc)
+    )
+
+    response = client.get(
+        "/api/v1/analyses",
+        params={"date_from": date_cls(2026, 1, 1).isoformat(), "date_to": date_cls(2026, 1, 31).isoformat()},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["participant_name"] == "Ana"
+
+
+def test_gestor_filters_list_by_owner_id_within_team(client_factory):
+    gestor_client, gestor = client_factory(role=UserRole.GESTOR)
+    colaborador_a_client, colaborador_a = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+    colaborador_b_client, colaborador_b = client_factory(role=UserRole.COLABORADOR, manager_id=gestor.id)
+
+    _create_analysis(gestor_client, owner_id=str(colaborador_a.id), participant_name="Ana")
+    _create_analysis(gestor_client, owner_id=str(colaborador_b.id), participant_name="Bruno")
+
+    response = gestor_client.get("/api/v1/analyses", params={"owner_id": str(colaborador_a.id)})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["participant_name"] == "Ana"
+
+
+def test_gestor_filters_list_by_owner_id_outside_team_returns_404(client_factory):
+    gestor_client, _ = client_factory(role=UserRole.GESTOR)
+    _, outsider = client_factory(role=UserRole.COLABORADOR)
+
+    response = gestor_client.get("/api/v1/analyses", params={"owner_id": str(outsider.id)})
+
+    assert response.status_code == 404
+
+
+def test_admin_filters_list_by_any_owner_id(client_factory, admin_client):
+    owner_client, owner = client_factory()
+    other_client, _ = client_factory()
+
+    _create_analysis(owner_client, participant_name="Ana")
+    _create_analysis(other_client, participant_name="Bruno")
+
+    response = admin_client.get("/api/v1/analyses", params={"owner_id": str(owner.id)})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["participant_name"] == "Ana"
+
+
 def test_transcription_returns_409_before_transcribed(client):
     created = _create_analysis(client).json()
 

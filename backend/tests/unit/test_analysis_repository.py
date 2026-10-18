@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -228,6 +228,40 @@ def test_count_matches_filters_regardless_of_limit(db_session):
     assert repo.count(owner_ids=[owner.id]) == 2
     assert repo.count() == 3
     assert len(repo.list_with_owner(owner_ids=[owner.id], limit=1)) == 1
+
+
+def test_list_with_owner_filters_by_participant_name_case_insensitive(db_session):
+    repo = AnalysisRepository(db_session)
+    ana = repo.create(_new_analysis(interaction_id="interaction-pf-1", participant_name="Ana Souza"))
+    repo.create(_new_analysis(interaction_id="interaction-pf-2", participant_name="Bruno Lima"))
+
+    rows = repo.list_with_owner(participant_name="ana")
+
+    assert [row.id for row in rows] == [ana.id]
+    assert repo.count(participant_name="ana") == 1
+
+
+def test_list_with_owner_filters_by_date_range(db_session):
+    repo = AnalysisRepository(db_session)
+    inside = repo.create(_new_analysis(interaction_id="interaction-df-1"))
+    repo.update(inside.id, created_at=datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc))
+    outside = repo.create(_new_analysis(interaction_id="interaction-df-2"))
+    repo.update(outside.id, created_at=datetime(2026, 2, 1, 12, 0, tzinfo=timezone.utc))
+
+    rows = repo.list_with_owner(date_from=date(2026, 1, 1), date_to=date(2026, 1, 31))
+
+    assert [row.id for row in rows] == [inside.id]
+    assert repo.count(date_from=date(2026, 1, 1), date_to=date(2026, 1, 31)) == 1
+
+
+def test_list_with_owner_date_to_is_inclusive_of_the_whole_day(db_session):
+    repo = AnalysisRepository(db_session)
+    end_of_day = repo.create(_new_analysis(interaction_id="interaction-df-3"))
+    repo.update(end_of_day.id, created_at=datetime(2026, 1, 31, 23, 59, tzinfo=timezone.utc))
+
+    rows = repo.list_with_owner(date_to=date(2026, 1, 31))
+
+    assert [row.id for row in rows] == [end_of_day.id]
 
 
 def test_count_today_is_scoped_to_owner(db_session):

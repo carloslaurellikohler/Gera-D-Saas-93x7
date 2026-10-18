@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from sqlalchemy import Float, Row, cast, func, select
@@ -13,6 +13,29 @@ from app.models.user import User
 
 _BAND_LABEL = Analysis.analysis_result["overall_band_label"].astext
 _OVERALL_SCORE = cast(Analysis.analysis_result["overall_score"].astext, Float)
+
+
+def _apply_list_filters(
+    stmt: Any,
+    *,
+    status: AnalysisStatus | None,
+    owner_ids: Sequence[uuid.UUID] | None,
+    participant_name: str | None,
+    date_from: date | None,
+    date_to: date | None,
+) -> Any:
+    if status is not None:
+        stmt = stmt.where(Analysis.status == status)
+    if owner_ids is not None:
+        stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
+    if participant_name:
+        pattern = f"%{participant_name.lower()}%"
+        stmt = stmt.where(func.lower(Analysis.participant_name).like(pattern))
+    if date_from is not None:
+        stmt = stmt.where(Analysis.created_at >= datetime.combine(date_from, time.min))
+    if date_to is not None:
+        stmt = stmt.where(Analysis.created_at < datetime.combine(date_to, time.min) + timedelta(days=1))
+    return stmt
 
 
 class AnalysisRepository:
@@ -49,6 +72,9 @@ class AnalysisRepository:
         *,
         status: AnalysisStatus | None = None,
         owner_ids: Sequence[uuid.UUID] | None = None,
+        participant_name: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
         offset: int = 0,
         limit: int = 20,
     ) -> list[Row]:
@@ -73,10 +99,14 @@ class AnalysisRepository:
             .outerjoin(User, User.id == Analysis.owner_id)
             .order_by(Analysis.created_at.desc())
         )
-        if status is not None:
-            stmt = stmt.where(Analysis.status == status)
-        if owner_ids is not None:
-            stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
+        stmt = _apply_list_filters(
+            stmt,
+            status=status,
+            owner_ids=owner_ids,
+            participant_name=participant_name,
+            date_from=date_from,
+            date_to=date_to,
+        )
         stmt = stmt.offset(offset).limit(limit)
         return list(self.db.execute(stmt).all())
 
@@ -85,12 +115,19 @@ class AnalysisRepository:
         *,
         status: AnalysisStatus | None = None,
         owner_ids: Sequence[uuid.UUID] | None = None,
+        participant_name: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> int:
         stmt = select(func.count()).select_from(Analysis)
-        if status is not None:
-            stmt = stmt.where(Analysis.status == status)
-        if owner_ids is not None:
-            stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
+        stmt = _apply_list_filters(
+            stmt,
+            status=status,
+            owner_ids=owner_ids,
+            participant_name=participant_name,
+            date_from=date_from,
+            date_to=date_to,
+        )
         return self.db.execute(stmt).scalar_one()
 
     def update(self, analysis_id: uuid.UUID, **fields: Any) -> Analysis:

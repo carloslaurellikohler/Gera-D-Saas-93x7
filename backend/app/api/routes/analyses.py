@@ -118,6 +118,10 @@ def create_analysis(
 @router.get("", response_model=PaginatedResponse[AnalysisListItem])
 def list_analyses(
     status: AnalysisStatus | None = Query(None),
+    participant_name: str | None = Query(None),
+    owner_id: uuid.UUID | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     service: AnalysisService = Depends(get_analysis_service),
@@ -126,7 +130,19 @@ def list_analyses(
 ):
     offset = (page - 1) * page_size
     owner_ids = _owner_scope(current_user, db)
-    items, total = service.list_analyses(status=status, owner_ids=owner_ids, offset=offset, limit=page_size)
+    if owner_id is not None:
+        if owner_ids is not None and owner_id not in owner_ids:
+            raise HTTPException(status_code=404, detail="Colaborador não encontrado na sua equipe.")
+        owner_ids = [owner_id]
+    items, total = service.list_analyses(
+        status=status,
+        owner_ids=owner_ids,
+        participant_name=participant_name,
+        date_from=date_from,
+        date_to=date_to,
+        offset=offset,
+        limit=page_size,
+    )
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 

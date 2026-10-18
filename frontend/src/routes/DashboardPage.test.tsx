@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DashboardPage from "./DashboardPage";
 import * as analysesApi from "../api/analyses";
 import * as authApi from "../api/auth";
 import * as dashboardApi from "../api/dashboard";
+import * as usersApi from "../api/users";
 import { AuthProvider } from "../context/AuthContext";
 import type { DashboardStatsResponse } from "../types/dashboard";
 import type { PaginatedResponse, AnalysisListItem } from "../types/analysis";
@@ -69,6 +70,8 @@ const STATS: DashboardStatsResponse = {
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(COLABORADOR);
+  vi.spyOn(usersApi, "listMyTeam").mockResolvedValue([]);
+  vi.spyOn(usersApi, "listUsers").mockResolvedValue([]);
 });
 
 describe("DashboardPage", () => {
@@ -97,7 +100,7 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Minhas análises")).not.toBeInTheDocument();
   });
 
-  it("hides the Colaborador column for a COLABORADOR but shows tempo and nota", async () => {
+  it("hides the Colaborador column and filter for a COLABORADOR but shows tempo and nota", async () => {
     vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
     vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
 
@@ -105,6 +108,7 @@ describe("DashboardPage", () => {
 
     await screen.findByText("João Silva");
     expect(screen.queryByText("Colaborador")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Filtrar por colaborador")).not.toBeInTheDocument();
     expect(screen.getByText("30 min")).toBeInTheDocument();
     expect(screen.getByText("8.5")).toBeInTheDocument();
     expect(screen.getByText("Excelente")).toBeInTheDocument();
@@ -153,5 +157,55 @@ describe("DashboardPage", () => {
     // Aparece duas vezes: no "Quadro da equipe" (agregado) e na coluna Colaborador
     // da tabela de análises (mesmo colaborador dono da análise do fixture ANALYSES).
     expect(screen.getAllByText("Colaboradora Teste").length).toBeGreaterThan(0);
+  });
+
+  it("lets a GESTOR filter the list by colaborador", async () => {
+    vi.spyOn(authApi, "getCurrentUser").mockResolvedValue(GESTOR);
+    vi.spyOn(usersApi, "listMyTeam").mockResolvedValue([
+      { ...COLABORADOR, id: "colab-1", name: "Colaboradora Teste" },
+    ]);
+    const listAnalysesSpy = vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    const select = await screen.findByLabelText("Filtrar por colaborador");
+    fireEvent.change(select, { target: { value: "colab-1" } });
+
+    await waitFor(() => {
+      expect(listAnalysesSpy).toHaveBeenLastCalledWith(expect.objectContaining({ owner_id: "colab-1" }));
+    });
+  });
+
+  it("filters the list by a date range", async () => {
+    const listAnalysesSpy = vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    fireEvent.change(screen.getByLabelText("Data inicial"), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText("Data final"), { target: { value: "2026-01-31" } });
+
+    await waitFor(() => {
+      expect(listAnalysesSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ date_from: "2026-01-01", date_to: "2026-01-31" }),
+      );
+    });
+  });
+
+  it("sends the participant search to the server instead of filtering locally", async () => {
+    const listAnalysesSpy = vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    fireEvent.change(screen.getByLabelText("Buscar participante"), { target: { value: "jo" } });
+
+    await waitFor(() => {
+      expect(listAnalysesSpy).toHaveBeenLastCalledWith(expect.objectContaining({ participant_name: "jo" }));
+    });
   });
 });

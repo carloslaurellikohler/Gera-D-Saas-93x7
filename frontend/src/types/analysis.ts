@@ -21,6 +21,14 @@ export type AnalysisStatus =
   | "COMPLETED"
   | "FAILED";
 
+export interface AnalysisFilters {
+  status?: AnalysisStatus;
+  participant_name?: string;
+  owner_id?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
 export interface AnalysisListItem {
   id: string;
   participant_name: string;

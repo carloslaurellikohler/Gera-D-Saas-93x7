@@ -118,10 +118,27 @@ class AnalysisService:
         owner_ids: Sequence[uuid.UUID] | None,
         offset: int,
         limit: int,
+        participant_name: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> tuple[list[AnalysisListRow], int]:
         label_color_map = MethodologyRepository(self.repo.db).get_label_color_map()
-        rows = self.repo.list_with_owner(status=status, owner_ids=owner_ids, offset=offset, limit=limit)
-        total = self.repo.count(status=status, owner_ids=owner_ids)
+        rows = self.repo.list_with_owner(
+            status=status,
+            owner_ids=owner_ids,
+            participant_name=participant_name,
+            date_from=date_from,
+            date_to=date_to,
+            offset=offset,
+            limit=limit,
+        )
+        total = self.repo.count(
+            status=status,
+            owner_ids=owner_ids,
+            participant_name=participant_name,
+            date_from=date_from,
+            date_to=date_to,
+        )
         items = [
             AnalysisListRow(
                 id=row.id,

@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPostForm } from "./client";
 import type {
+  AnalysisFilters,
   AnalysisQuota,
   AnalysisResponse,
   AnalysisResultResponse,
@@ -8,12 +9,20 @@ import type {
   CreateAnalysisPayload,
   PaginatedResponse,
   AnalysisListItem,
-  AnalysisStatus,
 } from "../types/analysis";
 
-export function listAnalyses(status?: AnalysisStatus) {
-  const query = status ? `?status=${status}` : "";
-  return apiGet<PaginatedResponse<AnalysisListItem>>(`/analyses${query}`);
+export function listAnalyses(filters: AnalysisFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.participant_name) params.set("participant_name", filters.participant_name);
+  if (filters.owner_id) params.set("owner_id", filters.owner_id);
+  if (filters.date_from) params.set("date_from", filters.date_from);
+  if (filters.date_to) params.set("date_to", filters.date_to);
+  // Página sem controles de paginação na UI hoje — pede o teto permitido pelo
+  // backend (page_size<=100) para os filtros não "sumirem" resultados além das
+  // primeiras 20 linhas (default do backend quando page_size não é enviado).
+  params.set("page_size", "100");
+  return apiGet<PaginatedResponse<AnalysisListItem>>(`/analyses?${params.toString()}`);
 }
 
 export function getAnalysis(id: string) {

@@ -569,6 +569,45 @@ def test_list_analyses_includes_owner_name_duration_and_farol_only_when_complete
     assert by_id[completed.id].overall_farol_level == "excelente"
 
 
+def test_list_analyses_applies_participant_and_date_filters(
+    service: AnalysisService, storage, tmp_path, current_user
+):
+    from datetime import date, datetime, timezone
+
+    content = b"CS: Oi\nPB: Oi"
+
+    def _upload(participant_name: str, file_name: str):
+        return service.create_and_store(
+            current_user=current_user,
+            participant_name=participant_name,
+            objective="Onboarding",
+            objective_complement=None,
+            duration_minutes=None,
+            interaction_date=None,
+            file_name=file_name,
+            temp_file_path=_write_temp_upload(tmp_path, file_name, content),
+            file_size_bytes=len(content),
+            file_header=content[:4096],
+        )
+
+    kept = _upload("Ana Souza", "kept.txt")
+    service.repo.update(kept.id, created_at=datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc))
+    _upload("Bruno Lima", "other.txt")
+
+    items, total = service.list_analyses(
+        status=None,
+        owner_ids=[current_user.id],
+        offset=0,
+        limit=20,
+        participant_name="ana",
+        date_from=date(2026, 1, 1),
+        date_to=date(2026, 1, 31),
+    )
+
+    assert total == 1
+    assert items[0].id == kept.id
+
+
 def test_list_analyses_total_ignores_limit(service: AnalysisService, storage, tmp_path, current_user):
     for i in range(3):
         _create_uploaded_analysis(service, storage, current_user, tmp_path, file_name=f"q{i}.txt")
