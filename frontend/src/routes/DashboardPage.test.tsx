@@ -74,14 +74,23 @@ beforeEach(() => {
 });
 
 describe("DashboardPage", () => {
-  it("renders the personal KPI block scoped to the current user's own analyses", async () => {
-    vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
+  it("renders the personal KPI block computed from the loaded analyses", async () => {
+    vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue({
+      ...ANALYSES,
+      items: [
+        ANALYSES.items[0],
+        { ...ANALYSES.items[0], id: "2", participant_name: "Maria Souza", overall_score: 5.5 },
+      ],
+      total: 2,
+    });
     vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
 
     renderPage();
 
     expect(await screen.findByText("Minhas análises")).toBeInTheDocument();
-    expect(screen.getByText("7.2")).toBeInTheDocument();
+    // Nota média vem da própria lista carregada (8.5 e 5.5), não de `stats.trend` (7.2).
+    expect(screen.getByText("7.0")).toBeInTheDocument();
+    expect(screen.queryByText("7.2")).not.toBeInTheDocument();
   });
 
   it("omits the KPI block when there is nothing to aggregate yet", async () => {
@@ -109,8 +118,10 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Colaborador")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Filtrar por colaborador")).not.toBeInTheDocument();
     expect(screen.getByText("30 min")).toBeInTheDocument();
-    expect(screen.getByText("8.5")).toBeInTheDocument();
-    expect(screen.getByText("Excelente")).toBeInTheDocument();
+    // "8.5"/"Excelente" aparecem tanto na coluna Nota quanto nos cards de topo
+    // (única análise carregada, então o agregado coincide com o item individual).
+    expect(screen.getAllByText("8.5").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Excelente").length).toBeGreaterThan(0);
   });
 
   it("shows the Colaborador column with the owner name for a GESTOR", async () => {
@@ -205,6 +216,64 @@ describe("DashboardPage", () => {
 
     await waitFor(() => {
       expect(listAnalysesSpy).toHaveBeenLastCalledWith(expect.objectContaining({ participant_name: "jo" }));
+    });
+  });
+
+  it("recalculates the KPI cards from the status pill, not from the global stats", async () => {
+    vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue({
+      ...ANALYSES,
+      items: [
+        ANALYSES.items[0],
+        {
+          ...ANALYSES.items[0],
+          id: "2",
+          participant_name: "Maria Souza",
+          status: "FAILED",
+          overall_score: null,
+          overall_farol_level: null,
+        },
+      ],
+      total: 2,
+    });
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    const kpiBefore = screen.getByText("Minhas análises").closest(".kpi-card");
+    expect(kpiBefore).toHaveTextContent("2");
+
+    fireEvent.click(screen.getByRole("button", { name: /Com falha/ }));
+
+    await screen.findByText("Maria Souza");
+    expect(screen.queryByText("João Silva")).not.toBeInTheDocument();
+    const kpiAfter = screen.getByText("Minhas análises").closest(".kpi-card");
+    expect(kpiAfter).toHaveTextContent("1");
+    const notaCard = screen.getByText("Minha nota média").closest(".kpi-card");
+    expect(notaCard).toHaveTextContent("—");
+  });
+
+  it("only shows Limpar filtros when a filter is active, and resets everything on click", async () => {
+    const listAnalysesSpy = vi.spyOn(analysesApi, "listAnalyses").mockResolvedValue(ANALYSES);
+    vi.spyOn(dashboardApi, "getDashboardStats").mockResolvedValue(STATS);
+
+    renderPage();
+
+    await screen.findByText("João Silva");
+    expect(screen.queryByRole("button", { name: "Limpar filtros" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Buscar participante"), { target: { value: "jo" } });
+    fireEvent.click(screen.getByRole("button", { name: /Com falha/ }));
+
+    const clearButton = await screen.findByRole("button", { name: "Limpar filtros" });
+    fireEvent.click(clearButton);
+
+    expect(screen.getByLabelText("Buscar participante")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Limpar filtros" })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(listAnalysesSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ participant_name: undefined }),
+      );
     });
   });
 });

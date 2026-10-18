@@ -45,7 +45,7 @@ export default function DashboardPage() {
     ? "minmax(0,0.9fr) minmax(0,1.1fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px"
     : "minmax(0,1.3fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px";
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [search, setSearch] = useState("");
   const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get("owner_id") ?? "");
@@ -68,24 +68,43 @@ export default function DashboardPage() {
   });
   const { data: stats } = useDashboardStats();
 
-  const statsTotalVolume = useMemo(
-    () => stats?.volume_by_status.reduce((sum, v) => sum + v.count, 0) ?? 0,
-    [stats],
+  const visibleItems = useMemo(() => {
+    const items = data?.items ?? [];
+    return items.filter((i) => matchesFilter(i, filter));
+  }, [data, filter]);
+
+  const visibleScoredItems = useMemo(
+    () => visibleItems.filter((i) => i.overall_score !== null),
+    [visibleItems],
   );
 
   const statsAvgScore = useMemo(() => {
-    if (!stats) return null;
-    const scored = stats.trend.filter((t) => t.avg_score !== null);
-    const totalCount = scored.reduce((sum, t) => sum + t.count, 0);
-    if (totalCount === 0) return null;
-    const weighted = scored.reduce((sum, t) => sum + (t.avg_score ?? 0) * t.count, 0);
-    return weighted / totalCount;
-  }, [stats]);
+    if (visibleScoredItems.length === 0) return null;
+    const total = visibleScoredItems.reduce((sum, i) => sum + (i.overall_score ?? 0), 0);
+    return total / visibleScoredItems.length;
+  }, [visibleScoredItems]);
 
   const statsPredominantFarol = useMemo(() => {
-    if (!stats || stats.farol_distribution.length === 0) return null;
-    return stats.farol_distribution.reduce((max, item) => (item.count > max.count ? item : max));
-  }, [stats]);
+    const withFarol = visibleItems.filter(
+      (i): i is AnalysisListItem & { overall_farol_level: string } => i.overall_farol_level !== null,
+    );
+    if (withFarol.length === 0) return null;
+    const countByLevel = new Map<string, number>();
+    for (const item of withFarol) {
+      const level = item.overall_farol_level;
+      countByLevel.set(level, (countByLevel.get(level) ?? 0) + 1);
+    }
+    let topLevel = withFarol[0].overall_farol_level;
+    let topCount = 0;
+    for (const [level, count] of countByLevel) {
+      if (count > topCount) {
+        topLevel = level;
+        topCount = count;
+      }
+    }
+    const pct = Math.round((topCount / withFarol.length) * 100);
+    return { level: topLevel, pct: `${pct}%` };
+  }, [visibleItems]);
 
   const counts = useMemo(() => {
     const items = data?.items ?? [];
@@ -97,12 +116,22 @@ export default function DashboardPage() {
     };
   }, [data]);
 
-  const visibleItems = useMemo(() => {
-    const items = data?.items ?? [];
-    return items.filter((i) => matchesFilter(i, filter));
-  }, [data, filter]);
+  const hasActiveFilters = Boolean(
+    search.trim() || ownerFilter || dateFrom || dateTo || filter !== "todos",
+  );
 
-  const hasActiveFilters = Boolean(search.trim() || ownerFilter || dateFrom || dateTo);
+  const clearFilters = () => {
+    setSearch("");
+    setOwnerFilter("");
+    setDateFrom("");
+    setDateTo("");
+    setFilter("todos");
+    if (searchParams.has("owner_id")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("owner_id");
+      setSearchParams(next);
+    }
+  };
 
   return (
     <div>
@@ -117,12 +146,11 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {stats && statsTotalVolume > 0 && (
+      {data && data.items.length > 0 && (
         <div className="kpi-grid" style={{ margin: "20px 0" }}>
           <div className="kpi-card">
             <span className="kpi-label">{isGestor ? "Análises da equipe" : "Minhas análises"}</span>
-            <span className="kpi-value">{statsTotalVolume}</span>
-            <span className="kpi-description">Últimos 6 meses</span>
+            <span className="kpi-value">{visibleItems.length}</span>
           </div>
           <div className="kpi-card">
             <span className="kpi-label">{isGestor ? "Nota média da equipe" : "Minha nota média"}</span>
@@ -243,6 +271,11 @@ export default function DashboardPage() {
             <button className={`pill${filter === "falha" ? " pill-active" : ""}`} onClick={() => setFilter("falha")}>
               Com falha <span style={{ color: "var(--content-secondary)" }}>{counts.falha}</span>
             </button>
+            {hasActiveFilters && (
+              <button type="button" className="btn btn-secondary" onClick={clearFilters}>
+                Limpar filtros
+              </button>
+            )}
           </div>
 
           {data.items.length === 0 ? (
