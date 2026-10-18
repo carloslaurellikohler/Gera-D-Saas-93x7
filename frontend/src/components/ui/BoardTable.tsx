@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import FarolBadge, { toFarolLevel } from "./FarolBadge";
 import Icon from "./Icon";
 
@@ -40,10 +41,15 @@ export default function BoardTable({
         <span>Tendência</span>
       </div>
       {rows.map((row) => (
-        <div
+        <Link
           key={row.id}
+          to={`/?owner_id=${row.id}`}
           className="data-table-row"
-          style={{ gridTemplateColumns: "minmax(0,1.4fr) 100px 100px 220px 110px" }}
+          style={{
+            gridTemplateColumns: "minmax(0,1.4fr) 100px 100px 220px 110px",
+            color: "inherit",
+            textDecoration: "none",
+          }}
         >
           <b>{row.name}</b>
           <span>{row.count}</span>
@@ -62,7 +68,7 @@ export default function BoardTable({
               <Icon name={TREND_ICON[row.trend]} size={18} />
             </span>
           )}
-        </div>
+        </Link>
       ))}
       {rows.length === 0 && (
         <div className="data-table-row">

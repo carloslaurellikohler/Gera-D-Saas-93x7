@@ -115,7 +115,7 @@ def test_unknown_band_label_falls_back_gracefully(db_session, service, regular_u
     assert stats.farol_distribution[0].level == "outro"
 
 
-def test_admin_scope_includes_board_regular_user_scope_does_not(
+def test_admin_scope_includes_team_board_regular_user_scope_does_not(
     db_session, service, regular_user, admin_user
 ):
     now = datetime.now(timezone.utc)
@@ -132,10 +132,10 @@ def test_admin_scope_includes_board_regular_user_scope_does_not(
     user_stats = service.get_stats(current_user=regular_user, period="30d")
     admin_stats = service.get_stats(current_user=admin_user, period="30d")
 
-    assert user_stats.board is None
-    assert admin_stats.board is not None
-    assert len(admin_stats.board) == 1
-    assert admin_stats.board[0].name == "Ana"
+    assert user_stats.team_board is None
+    assert admin_stats.team_board is not None
+    assert len(admin_stats.team_board) == 1
+    assert admin_stats.team_board[0].name == regular_user.name
 
 
 def test_regular_user_only_sees_own_farol_distribution(db_session, service, regular_user, admin_user):
@@ -221,7 +221,6 @@ def test_gestor_scope_includes_team_board_with_colaborador_scores(db_session, se
 
     stats = service.get_stats(current_user=gestor, period="30d")
 
-    assert stats.board is None
     assert stats.team_board is not None
     assert len(stats.team_board) == 1
     assert stats.team_board[0].user_id == str(colaborador.id)

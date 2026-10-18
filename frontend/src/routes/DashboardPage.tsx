@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAnalyses } from "../hooks/useAnalyses";
 import { useDashboardStats } from "../hooks/useDashboardStats";
 import { useTeamMembers } from "../hooks/useTeamMembers";
@@ -45,11 +45,16 @@ export default function DashboardPage() {
     ? "minmax(0,0.9fr) minmax(0,1.1fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px"
     : "minmax(0,1.3fr) minmax(0,0.9fr) 90px 84px 240px 176px 20px";
 
+  const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [search, setSearch] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get("owner_id") ?? "");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  useEffect(() => {
+    setOwnerFilter(searchParams.get("owner_id") ?? "");
+  }, [searchParams]);
 
   const team = useTeamMembers();
   const activeUsers = useUsers({ status: "ACTIVE" }, { enabled: isAdmin });

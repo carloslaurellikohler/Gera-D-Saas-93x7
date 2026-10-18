@@ -63,7 +63,6 @@ const STATS: DashboardStatsResponse = {
   volume_by_status: [{ status: "COMPLETED", count: 1 }],
   farol_distribution: [{ label: "Atenção", level: "atencao", count: 1, pct: "100%" }],
   trend: [{ period_start: "2026-01-05", count: 1, avg_score: 7.2 }],
-  board: null,
   team_board: null,
 };
 

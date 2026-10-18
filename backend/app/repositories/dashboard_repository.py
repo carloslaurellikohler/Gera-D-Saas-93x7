@@ -60,31 +60,13 @@ class DashboardRepository:
             stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
         return list(self.db.execute(stmt).all())
 
-    def completed_rows_by_participant(
-        self, *, since: date
-    ) -> list[Row[tuple[str, str, datetime, float | None, str | None]]]:
-        """Linhas cruas (uma por análise concluída) para montar o 'Quadro individual'
-        (só ADMIN) — agrupamento por PB (participant_name/pb_id), não por CS/usuário
-        dono da análise: o que o admin quer ver aqui é o desempenho de cada
-        profissional avaliado, não de quem cadastrou a análise na plataforma."""
-        stmt = select(
-            Analysis.pb_id,
-            Analysis.participant_name,
-            Analysis.completed_at,
-            _OVERALL_SCORE,
-            _BAND_LABEL,
-        ).where(
-            Analysis.status == AnalysisStatus.COMPLETED,
-            Analysis.completed_at >= since,
-            Analysis.pb_id.is_not(None),
-        )
-        return list(self.db.execute(stmt).all())
-
     def completed_rows_by_owner(
-        self, *, owner_ids: Sequence[uuid.UUID], since: date
+        self, *, owner_ids: Sequence[uuid.UUID] | None, since: date
     ) -> list[Row[tuple[uuid.UUID, str, datetime, float | None, str | None]]]:
-        """Simétrico a completed_rows_by_participant, mas agrupado pelo dono
-        (colaborador avaliado) — usado pelo 'Quadro da equipe' do GESTOR."""
+        """Linhas cruas (uma por análise concluída) para montar o quadro agrupado por
+        colaborador dono da análise (Analysis.owner_id) — usado tanto pelo 'Quadro da
+        equipe' do GESTOR (owner_ids=lista de subordinados) quanto pelo 'Quadro
+        individual' do ADMIN (owner_ids=None, sem filtro, toda a organização)."""
         stmt = (
             select(
                 Analysis.owner_id,
@@ -97,7 +79,8 @@ class DashboardRepository:
             .where(
                 Analysis.status == AnalysisStatus.COMPLETED,
                 Analysis.completed_at >= since,
-                Analysis.owner_id.in_(owner_ids),
             )
         )
+        if owner_ids is not None:
+            stmt = stmt.where(Analysis.owner_id.in_(owner_ids))
         return list(self.db.execute(stmt).all())

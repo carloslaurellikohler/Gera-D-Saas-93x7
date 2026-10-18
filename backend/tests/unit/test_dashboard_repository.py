@@ -166,7 +166,7 @@ def test_since_filter_excludes_older_records(db_session, users):
     assert result == []
 
 
-def test_completed_rows_by_participant_ignores_user_scope(db_session, users):
+def test_completed_rows_by_owner_without_filter_returns_all_owners(db_session, users):
     user_a, user_b = users
     now = datetime.now(timezone.utc)
     since = date.today() - timedelta(days=30)
@@ -190,10 +190,10 @@ def test_completed_rows_by_participant_ignores_user_scope(db_session, users):
     )
 
     repo = DashboardRepository(db_session)
-    rows = repo.completed_rows_by_participant(since=since)
+    rows = repo.completed_rows_by_owner(owner_ids=None, since=since)
 
-    names = {row.participant_name for row in rows}
-    assert names == {"Ana", "Bruno"}
+    names = {row.name for row in rows}
+    assert names == {user_a.name, user_b.name}
 
 
 def test_completed_rows_by_owner_filters_and_joins_name(db_session, users):

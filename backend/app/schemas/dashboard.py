@@ -30,19 +30,10 @@ class TrendPoint(BaseModel):
     avg_score: float | None
 
 
-class ProfessionalBoardRow(BaseModel):
-    # PB avaliado (participant_name da Analysis) — não o usuário/CS dono do registro.
-    pb_id: str
-    name: str
-    count: int
-    avg_score: float | None
-    level: str | None
-    trend: Literal["up", "down", "flat"] | None
-
-
 class TeamBoardRow(BaseModel):
-    # Colaborador da equipe do GESTOR (Analysis.owner_id) — mesmos campos de
-    # ProfessionalBoardRow, trocando o agrupamento de PB avaliado para usuário dono.
+    # Colaborador avaliado (Analysis.owner_id) — reaproveitado pelo "Quadro da equipe"
+    # do GESTOR (escopado aos subordinados) e pelo "Quadro individual" do ADMIN (sem
+    # restrição, toda a organização).
     user_id: str
     name: str
     count: int
@@ -56,5 +47,4 @@ class DashboardStatsResponse(BaseModel):
     volume_by_status: list[VolumeByStatus]
     farol_distribution: list[FarolDistributionItem]
     trend: list[TrendPoint]
-    board: list[ProfessionalBoardRow] | None = None
     team_board: list[TeamBoardRow] | None = None

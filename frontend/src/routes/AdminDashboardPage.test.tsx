@@ -25,10 +25,9 @@ const STATS: DashboardStatsResponse = {
   ],
   farol_distribution: [{ label: "Excelente desempenho", level: "excelente", count: 5, pct: "100%" }],
   trend: [{ period_start: "2026-01-05", count: 5, avg_score: 8.4 }],
-  board: [
-    { pb_id: "ana", name: "Ana Silva", count: 3, avg_score: 8.4, level: "excelente", trend: "up" },
+  team_board: [
+    { user_id: "ana", name: "Ana Silva", count: 3, avg_score: 8.4, level: "excelente", trend: "up" },
   ],
-  team_board: null,
 };
 
 beforeEach(() => {
@@ -51,7 +50,7 @@ describe("AdminDashboardPage", () => {
       ...STATS,
       farol_distribution: [],
       trend: [],
-      board: [],
+      team_board: [],
     });
 
     renderPage();

@@ -17,7 +17,6 @@ from app.schemas.dashboard import (
     DashboardStatsResponse,
     FarolDistributionItem,
     Period,
-    ProfessionalBoardRow,
     TeamBoardRow,
     TrendPoint,
     VolumeByStatus,
@@ -46,12 +45,11 @@ class DashboardService:
         since = date.today() - timedelta(days=_PERIOD_DAYS[period])
         label_color_map = self.methodology_repo.get_label_color_map()
 
-        board: list[ProfessionalBoardRow] | None = None
         team_board: list[TeamBoardRow] | None = None
 
         if current_user.role == UserRole.ADMIN:
             owner_ids = None
-            board = self._build_pb_board(since, label_color_map)
+            team_board = self._build_team_board(owner_ids, since, label_color_map)
         elif current_user.role == UserRole.GESTOR:
             owner_ids = [u.id for u in self.user_repo.list_subordinates(current_user.id)]
             team_board = self._build_team_board(owner_ids, since, label_color_map)
@@ -85,29 +83,13 @@ class DashboardService:
             volume_by_status=volume,
             farol_distribution=farol_distribution,
             trend=trend,
-            board=board,
             team_board=team_board,
         )
 
-    def _build_pb_board(self, since: date, label_color_map: dict[str, str]) -> list[ProfessionalBoardRow]:
-        rows = self.repo.completed_rows_by_participant(since=since)
-        groups = _group_entries(rows)
-        return [
-            ProfessionalBoardRow(
-                pb_id=group_id,
-                name=name,
-                count=len(entries),
-                avg_score=_round_or_none(_avg_score(entries)),
-                level=get_farol_level(entries[-1][2], label_color_map),
-                trend=_trend_from_entries(entries),
-            )
-            for group_id, name, entries in groups
-        ]
-
     def _build_team_board(
-        self, owner_ids: list[uuid.UUID], since: date, label_color_map: dict[str, str]
+        self, owner_ids: list[uuid.UUID] | None, since: date, label_color_map: dict[str, str]
     ) -> list[TeamBoardRow]:
-        if not owner_ids:
+        if owner_ids is not None and not owner_ids:
             return []
         rows = self.repo.completed_rows_by_owner(owner_ids=owner_ids, since=since)
         groups = _group_entries(rows)
@@ -126,8 +108,8 @@ class DashboardService:
 
 def _group_entries(rows) -> list[tuple]:
     """Agrupa linhas cruas (group_id, name, completed_at, score, band_label) por
-    group_id, ordenando cada grupo por completed_at — reaproveitado tanto pelo quadro
-    por PB (ADMIN) quanto pelo quadro por colaborador (GESTOR)."""
+    group_id, ordenando cada grupo por completed_at — usado pelo quadro por colaborador
+    (ADMIN sem restrição, GESTOR escopado aos subordinados)."""
     groups: dict = {}
     for group_id, name, completed_at, score, band_label in rows:
         group = groups.setdefault(group_id, {"name": name, "entries": []})

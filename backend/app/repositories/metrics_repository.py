@@ -1,6 +1,6 @@
 """Camada de leitura das métricas de evolução (Fase 4). Só consulta `analyses`; a
 agregação (médias por critério, buckets semanais) é feita em Python no
-MetricsService — ver precedente DashboardRepository.completed_rows_by_participant,
+MetricsService — ver precedente DashboardRepository.completed_rows_by_owner,
 já que iterar scores_by_criterion (array JSONB) em SQL puro exigiria
 jsonb_array_elements e ficaria fora do estilo do resto do repositório."""
 

@@ -18,15 +18,6 @@ export interface TrendPoint {
   avg_score: number | null;
 }
 
-export interface ProfessionalBoardRow {
-  pb_id: string;
-  name: string;
-  count: number;
-  avg_score: number | null;
-  level: string | null;
-  trend: "up" | "down" | "flat" | null;
-}
-
 export interface TeamBoardRow {
   user_id: string;
   name: string;
@@ -41,6 +32,5 @@ export interface DashboardStatsResponse {
   volume_by_status: VolumeByStatus[];
   farol_distribution: FarolDistributionItem[];
   trend: TrendPoint[];
-  board: ProfessionalBoardRow[] | null;
   team_board: TeamBoardRow[] | null;
 }

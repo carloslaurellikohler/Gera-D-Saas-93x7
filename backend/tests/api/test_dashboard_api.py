@@ -23,12 +23,12 @@ def test_regular_user_sees_only_own_aggregates(client_factory):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["board"] is None
+    assert body["team_board"] is None
     total_volume = sum(item["count"] for item in body["volume_by_status"])
     assert total_volume == 1
 
 
-def test_admin_sees_global_aggregates_and_board(client_factory, admin_client):
+def test_admin_sees_global_aggregates_and_team_board(client_factory, admin_client):
     owner_client, _ = client_factory()
     other_client, _ = client_factory()
 
@@ -41,7 +41,7 @@ def test_admin_sees_global_aggregates_and_board(client_factory, admin_client):
     body = response.json()
     total_volume = sum(item["count"] for item in body["volume_by_status"])
     assert total_volume == 2
-    assert body["board"] is not None
+    assert body["team_board"] is not None
 
 
 def test_user_cannot_override_scope_via_query_param(client_factory):
@@ -82,7 +82,6 @@ def test_gestor_sees_team_board_not_global_board(client_factory):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["board"] is None
     assert body["team_board"] is not None
     total_volume = sum(item["count"] for item in body["volume_by_status"])
     assert total_volume == 1

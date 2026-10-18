@@ -87,7 +87,7 @@ export default function AdminDashboardPage() {
             </div>
             <div className="kpi-card">
               <span className="kpi-label">Profissionais avaliados</span>
-              <span className="kpi-value">{data.board?.length ?? "—"}</span>
+              <span className="kpi-value">{data.team_board?.length ?? "—"}</span>
               <span className="kpi-description">com análises concluídas</span>
             </div>
             <div className="kpi-card">
@@ -140,8 +140,8 @@ export default function AdminDashboardPage() {
 
           <BoardTable
             title="Quadro individual"
-            nameColumnLabel="Participante"
-            rows={(data.board ?? []).map((b) => ({ id: b.pb_id, ...b }))}
+            nameColumnLabel="Colaborador"
+            rows={(data.team_board ?? []).map((b) => ({ id: b.user_id, ...b }))}
             emptyMessage="Nenhuma análise concluída no período."
           />
         </>
