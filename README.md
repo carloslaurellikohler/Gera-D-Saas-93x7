@@ -117,6 +117,12 @@ valendo em produção.
 
 Serviços: `postgres`, `redis`, `backend`, `worker`, `nginx`, `certbot`.
 
+O arquivo declara `name: gerad-prod`, em vez de herdar o nome do diretório como o compose de
+desenvolvimento. Sem isso os dois stacks compartilhariam o mesmo projeto: o compose de
+produção adotaria os containers de dev como se fossem dele, o serviço `frontend` apareceria
+como órfão e um `down -v` apagaria os volumes do ambiente de desenvolvimento. Os volumes de
+produção são portanto `gerad-prod_pgdata`, `gerad-prod_storage_data`, `gerad-prod_letsencrypt`.
+
 ### Primeira subida
 
 Pré-requisitos na VPS: Docker + Compose, DNS do domínio já apontando para o IP da máquina e

@@ -12,6 +12,13 @@
 # Todo comando do dia a dia precisa do `-f docker-compose.prod.yml`, ou o compose usa o
 # arquivo de desenvolvimento. Para evitar o erro, na VPS: export COMPOSE_FILE=docker-compose.prod.yml
 
+# Nome de projeto próprio, em vez do default (o nome do diretório, que é o MESMO do
+# docker-compose.yml). Sem isto, o compose de produção adota os containers de
+# desenvolvimento como se fossem dele — o `frontend` de dev aparece como serviço órfão e um
+# `down -v` apagaria os volumes do ambiente de dev. Também evita que um `docker compose up`
+# sem `-f` suba o stack de dev em cima do de produção.
+name: gerad-prod
+
 # A sintaxe `${VAR:?mensagem}` faz o compose ABORTAR quando a variável está ausente ou
 # vazia. Em produção isso é o ponto: um .env incompleto não deve subir silenciosamente com
 # `dev-secret-change-me` como chave de JWT, que é o que os defaults do arquivo de dev fariam.
