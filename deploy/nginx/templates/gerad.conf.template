@@ -1,0 +1,114 @@
+# Server blocks de produção do GerAD.
+#
+# `${DOMAIN}` é substituído pelo entrypoint da imagem nginx (envsubst sobre
+# /etc/nginx/templates/*.template → /etc/nginx/conf.d/). `NGINX_ENVSUBST_FILTER: DOMAIN`
+# no compose restringe a substituição a essa única variável — sem o filtro, o envsubst
+# comeria as variáveis do próprio nginx ($host, $uri, $request_uri...) e a config sairia
+# quebrada. O domínio vive só no .env, nunca duplicado aqui.
+#
+# IMPORTANTE sobre `add_header`: um `add_header` dentro de um `location` DESCARTA todos os
+# headers herdados do server block. É por isso que o cache abaixo é feito com `expires`
+# (diretiva de outro módulo, que não zera a herança) em vez de
+# `add_header Cache-Control ...` — do contrário o HSTS e os headers de segurança
+# desapareceriam justamente no index.html e nos assets.
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name ${DOMAIN};
+
+    # Desafio HTTP-01 do Let's Encrypt: tem de responder em http puro, ANTES do redirect,
+    # senão a renovação automática falha. Mesmo volume montado no serviço `certbot`.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://${DOMAIN}$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    http2 on;
+    server_name ${DOMAIN};
+
+    # Emitidos por deploy/init-letsencrypt.sh e renovados pelo serviço `certbot`.
+    # O nginx NÃO sobe se estes arquivos não existirem — é o ovo e a galinha que aquele
+    # script resolve com um certificado autoassinado temporário.
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # Sem `preload`: entrar na lista de preload dos navegadores é irreversível na prática
+    # e trava o domínio inteiro em https, incluindo subdomínios futuros.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-Frame-Options "DENY" always;
+
+    # Casa com MAX_UPLOAD_MB=1024 do .env. O default do nginx é 1 MB, que rejeitaria o
+    # upload com 413 antes de a API ver o arquivo.
+    client_max_body_size 1024m;
+
+    root /usr/share/nginx/html;
+
+    # O nome `backend` é resolvido a cada requisição pelo DNS interno do Docker, em vez de
+    # uma única vez no boot. Com o nome literal em `proxy_pass`, o nginx fixa o IP na
+    # inicialização e passa a devolver 502 depois de um `up -d --build backend` que
+    # recrie o container com outro IP. Usar variável obriga a repetir $request_uri.
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $backend_origin http://backend:8000;
+
+    location /api/ {
+        proxy_pass $backend_origin$request_uri;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Upload de até 1 GB: com buffering ligado o nginx grava o corpo inteiro em disco
+        # antes de repassar um único byte, dobrando a latência percebida e o consumo de
+        # disco da VPS num arquivo de vídeo grande.
+        proxy_request_buffering off;
+
+        # A análise em si é assíncrona (Celery), mas POST /analyses só responde depois de
+        # gravar o arquivo no storage — em upload grande isso passa fácil do default de 60s.
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    location = /health {
+        proxy_pass $backend_origin$request_uri;
+        proxy_set_header Host $host;
+        access_log off;
+    }
+
+    # Os bundles em dist/assets/ têm hash no nome (index-BFyzJ2IB.css), então o conteúdo
+    # de uma URL nunca muda.
+    location /assets/ {
+        expires 1y;
+    }
+
+    # O index.html é o único arquivo sem hash: ele é o mapa que aponta para os bundles.
+    # Cacheá-lo serviria o HTML antigo apontando para assets que não existem mais.
+    location = /index.html {
+        expires -1;
+    }
+
+    # SPA: o react-router resolve a rota no cliente, então qualquer caminho desconhecido
+    # devolve o index.html em vez de 404. /docs e /openapi.json do FastAPI caem aqui de
+    # propósito — não são proxiados, logo a documentação da API não fica pública.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

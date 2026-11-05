@@ -20,4 +20,5 @@ frontend/dist/
 
 # Segredos
 .env
+.env.production
 *.env.local

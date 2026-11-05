@@ -1,0 +1,171 @@
+# Stack de PRODUÇÃO (VPS Hostinger, https://gerad.lk-tech-solutions.com).
+#
+# Não é um override do docker-compose.yml, é um arquivo completo e independente: as
+# diferenças são estruturais (nginx no lugar do dev server do Vite, nenhuma porta de
+# aplicação publicada no host, variáveis obrigatórias em vez de defaults de dev), e um
+# override parcial deixaria o `ports: 8000:8000` do arquivo de dev valendo em produção.
+#
+#   cp .env.production .env
+#   ./deploy/init-letsencrypt.sh                            # uma vez, com o DNS já apontado
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Todo comando do dia a dia precisa do `-f docker-compose.prod.yml`, ou o compose usa o
+# arquivo de desenvolvimento. Para evitar o erro, na VPS: export COMPOSE_FILE=docker-compose.prod.yml
+
+# A sintaxe `${VAR:?mensagem}` faz o compose ABORTAR quando a variável está ausente ou
+# vazia. Em produção isso é o ponto: um .env incompleto não deve subir silenciosamente com
+# `dev-secret-change-me` como chave de JWT, que é o que os defaults do arquivo de dev fariam.
+x-app-env: &app-env
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL obrigatorio}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  STORAGE_DIR: /data/storage
+  DEFAULT_CS_ID: ${DEFAULT_CS_ID:-cs-padrao}
+  DEFAULT_CS_NAME: ${DEFAULT_CS_NAME:-Consultor GerAD}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-1024}
+  TASK_TIME_LIMIT_SECONDS: ${TASK_TIME_LIMIT_SECONDS:-3600}
+  TASK_SOFT_TIME_LIMIT_SECONDS: ${TASK_SOFT_TIME_LIMIT_SECONDS:-3300}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY obrigatorio}
+  AI_COST_TRACKING_ENABLED: ${AI_COST_TRACKING_ENABLED:-true}
+  AI_COST_FFPROBE_TIMEOUT_SECONDS: ${AI_COST_FFPROBE_TIMEOUT_SECONDS:-60}
+  # Fallback apenas: o modelo/temperatura efetivos da análise vêm da tabela
+  # runtime_settings, lida a cada job. Só valem se a linha única não existir.
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
+  OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
+  DAILY_ANALYSIS_LIMIT_PER_OWNER: ${DAILY_ANALYSIS_LIMIT_PER_OWNER:-4}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gerad}
+      POSTGRES_USER: ${POSTGRES_USER:-gerad}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatorio}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gerad}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS obrigatorio}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY obrigatorio}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      ASSISTANT_EMBEDDING_MODEL: ${ASSISTANT_EMBEDDING_MODEL:-text-embedding-3-small}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Administrador}
+      # --- Bootstrap da tela /configuracoes ---
+      # Copiados para runtime_settings pela migration de seed na primeira subida; depois
+      # disso só a tela manda. Este container precisa recebê-los porque é ele que roda o
+      # `alembic upgrade head` (ver CMD do backend/Dockerfile), ou seja, é ele quem semeia.
+      ASSISTANT_CHAT_MODEL: ${ASSISTANT_CHAT_MODEL:-gpt-6-luna}
+      ASSISTANT_CHAT_TEMPERATURE: ${ASSISTANT_CHAT_TEMPERATURE:-0.3}
+      ASSISTANT_DAILY_MESSAGE_LIMIT: ${ASSISTANT_DAILY_MESSAGE_LIMIT:-30}
+    volumes:
+      - storage_data:/data/storage
+    # `expose`, não `ports`: quem fala com a internet é só o nginx. Publicar 8000 na VPS
+    # deixaria a API (e o /docs) acessível por IP, contornando o TLS e o proxy.
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+    volumes:
+      - storage_data:/data/storage
+
+  # Único serviço exposto à internet: serve o SPA já compilado e faz proxy de /api/ para o
+  # backend. A imagem carrega o bundle; a configuração vem montada, para que mexer no
+  # servidor ou recarregar certificado não exija rebuild.
+  nginx:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        # Inlinado no bundle em tempo de build (ver frontend/Dockerfile.prod). Trocar de
+        # domínio exige `up -d --build nginx`, não só um restart.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?VITE_API_BASE_URL obrigatorio}
+    restart: unless-stopped
+    # `depends_on` sem `condition`: só ordem de início. Com `service_healthy`, um backend
+    # quebrado derrubaria também o TLS e a tela de erro do SPA — o proxy resolve `backend`
+    # por DNS a cada requisição (ver resolver no template), então subir antes dele é ok.
+    depends_on:
+      - backend
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN obrigatorio}
+      # Restringe o envsubst do entrypoint a ${DOMAIN}; sem isso ele substituiria também
+      # $host, $uri e $request_uri por vazio, quebrando a configuração inteira.
+      NGINX_ENVSUBST_FILTER: DOMAIN
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/templates:/etc/nginx/templates:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    # NÃO declarar `command:` aqui. O docker-entrypoint.sh da imagem oficial só roda o
+    # envsubst sobre /etc/nginx/templates quando o primeiro argumento é literalmente
+    # "nginx"; qualquer override (`/bin/sh -c ...`) pula a geração em silêncio e o nginx
+    # sobe sem server block nenhum. O reload periódico que acompanha a renovação do
+    # certificado é feito por um hook em /docker-entrypoint.d/ (ver frontend/Dockerfile.prod).
+
+  # Renovação automática. A emissão inicial é manual, via deploy/init-letsencrypt.sh.
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    # `renew` é no-op enquanto faltar mais de 30 dias para expirar, então rodar de 12h em
+    # 12h é barato e é o que a própria documentação do Let's Encrypt recomenda.
+    entrypoint: /bin/sh
+    command: >
+      -c "trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
+volumes:
+  pgdata:
+  redisdata:
+  storage_data:
+  letsencrypt:
+  certbot_webroot:
