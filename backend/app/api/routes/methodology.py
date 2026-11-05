@@ -13,15 +13,30 @@ from app.schemas.methodology import (
     CreateMethodologyDraftRequest,
     MethodologyDetail,
     MethodologyDraftIn,
+    MethodologyPromptPreview,
     MethodologySummary,
 )
 from app.services.methodology_service import (
+    MethodologyAnchorMismatchError,
+    MethodologyBandCoverageError,
     MethodologyCalibratorMismatchError,
     MethodologyCategoryMismatchError,
     MethodologyNotDraftError,
     MethodologyNotFoundError,
     MethodologyService,
     MethodologyStillReferencedError,
+    MethodologyWeightSumError,
+)
+
+# Toda falha de validação semântica do publish é conflito de estado (409), não 422: o
+# payload é sintaticamente válido, o que não bate é a consistência da versão.
+_PUBLISH_CONFLICTS = (
+    MethodologyNotDraftError,
+    MethodologyCategoryMismatchError,
+    MethodologyCalibratorMismatchError,
+    MethodologyAnchorMismatchError,
+    MethodologyWeightSumError,
+    MethodologyBandCoverageError,
 )
 
 router = APIRouter(prefix="/methodology", tags=["methodology"])
@@ -56,6 +71,28 @@ def get_methodology(
     if methodology is None:
         raise HTTPException(status_code=404, detail="Versão de metodologia não encontrada.")
     return methodology
+
+
+@router.get("/{methodology_id}/prompt-preview", response_model=MethodologyPromptPreview)
+def get_methodology_prompt_preview(
+    methodology_id: uuid.UUID,
+    service: MethodologyService = Depends(get_methodology_service),
+    current_user: User = Depends(require_role(UserRole.ADMIN)),
+):
+    """Mostra o system prompt exato que a engine receberá com esta versão — é como o
+    ADMIN confere a régua compilada (âncoras, exemplos, elegibilidade) antes de publicar,
+    em vez de descobrir o resultado numa análise paga."""
+    methodology = service.get(methodology_id)
+    if methodology is None:
+        raise HTTPException(status_code=404, detail="Versão de metodologia não encontrada.")
+    try:
+        return service.build_prompt_preview(methodology)
+    except KeyError as exc:
+        # content incompleto numa versão antiga, anterior à validação de MethodologyContentIn
+        raise HTTPException(
+            status_code=409,
+            detail=f"Esta versão não tem o campo {exc} e não consegue gerar o prompt.",
+        ) from exc
 
 
 @router.post("/draft", response_model=MethodologyDetail, status_code=201)
@@ -95,7 +132,7 @@ def publish_methodology(
         return service.publish(methodology_id)
     except MethodologyNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except (MethodologyNotDraftError, MethodologyCategoryMismatchError, MethodologyCalibratorMismatchError) as exc:
+    except _PUBLISH_CONFLICTS as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 

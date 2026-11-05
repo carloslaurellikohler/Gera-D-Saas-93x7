@@ -68,6 +68,9 @@ def usage_sink() -> FakeUsageSink:
 def service(db_session, storage, settings, usage_sink) -> AnalysisService:
     repo = AnalysisRepository(db_session)
     engine = MagicMock()
+    # Sem pesos, a ponderação é no-op e devolve o par holístico vazio — ver
+    # engine_integration/score_resolver.apply_weighted_overall.
+    engine.apply_weighted_overall.return_value = (None, None)
     engine.methodology_id = _seed_methodology(db_session).id
     return AnalysisService(
         repo=repo, storage=storage, engine=engine, settings=settings, usage_sink=usage_sink
@@ -310,6 +313,9 @@ def test_run_pipeline_does_not_depend_on_settings_defaults(
     )
     repo = AnalysisRepository(db_session)
     engine = MagicMock()
+    # Sem pesos, a ponderação é no-op e devolve o par holístico vazio — ver
+    # engine_integration/score_resolver.apply_weighted_overall.
+    engine.apply_weighted_overall.return_value = (None, None)
     engine.methodology_id = _seed_methodology(db_session).id
     service = AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
 
@@ -368,6 +374,9 @@ def _service_with_limit(db_session, storage, limit: int) -> AnalysisService:
     )
     repo = AnalysisRepository(db_session)
     engine = MagicMock()
+    # Sem pesos, a ponderação é no-op e devolve o par holístico vazio — ver
+    # engine_integration/score_resolver.apply_weighted_overall.
+    engine.apply_weighted_overall.return_value = (None, None)
     engine.methodology_id = _seed_methodology(db_session).id
     return AnalysisService(repo=repo, storage=storage, engine=engine, settings=settings)
 
@@ -730,6 +739,9 @@ def test_falha_ao_contabilizar_custo_nao_reprova_a_analise(
 
     monkeypatch.setattr(subprocess, "run", MagicMock(return_value=MagicMock(stdout=b"60.0\n")))
     engine = MagicMock()
+    # Sem pesos, a ponderação é no-op e devolve o par holístico vazio — ver
+    # engine_integration/score_resolver.apply_weighted_overall.
+    engine.apply_weighted_overall.return_value = (None, None)
     engine.methodology_id = _seed_methodology(db_session).id
     service = AnalysisService(
         repo=AnalysisRepository(db_session),

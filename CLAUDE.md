@@ -6,8 +6,12 @@ O repositório é escrito em português (código, comentários, mensagens de err
 Mantenha esse idioma em código novo e em commits (`feat:`/`fix:` + descrição em pt-BR).
 
 Decisões arquiteturais já fechadas, que não devem ser reabertas sem motivo forte: engine
-intocada, auth stateless, sem autocadastro, sem transcodificação de áudio, nota geral nunca por
-fórmula, testes de repositório em Postgres real.
+intocada, auth stateless, sem autocadastro, sem transcodificação de áudio, testes de repositório
+em Postgres real.
+
+A nota geral **deixou de ser** julgamento holístico puro na Fase 9: agora é a soma ponderada das
+notas por critério, com pesos versionados na metodologia (ver *Nota geral ponderada*). As notas
+**por critério** e **por pilar** continuam sendo julgamento calibrado da IA, nunca fórmula.
 
 ## Três pacotes, uma regra de ouro
 
@@ -170,6 +174,60 @@ Ciclo de vida: DRAFT → PUBLISHED → ARCHIVED, com índice parcial único gara
 `CriterionKey` e que há 4 calibradores cobrindo as 4 cores do farol (senão 409).
 `analyses.methodology_version_id` registra qual versão gerou cada resultado.
 
+### Racional estruturado da metodologia (Fase 9)
+
+A tela `/calibracao` deixou de editar duas linhas por critério e passou a editar **todo** o system
+prompt. O racional que a IA aplica para chegar à nota virou dado relacional versionado:
+`methodology_anchors` (a régua observável 0–10, 5 níveis por critério e por pilar),
+`methodology_anchor_examples` (few-shot: fala literal → nota), `methodology_subdimensions`
+(rubrica de auditoria 0–4, `levels` é JSONB de exatamente 5 itens) e
+`methodology_eligibility_rules` (tetos de faixa: "sem priorização → no máximo 7,9").
+
+A engine continua **intocada**, e é isso que torna a fase possível: `Calibration.raw` é um dict
+livre, e a engine lê dele um conjunto FIXO de slots de texto — a allowlist de
+`pipeline/nodes/behavioral_analysis.py::_format_criteria` e as chaves de `pipeline/prompts.py`.
+`calibration_builder.py` deixou de traduzir 1:1 e passou a **compilar** essas tabelas nos slots:
+`calibration_note` recebe âncoras + exemplos, `critical_rule` recebe a elegibilidade,
+`desired_structure` recebe as subdimensões, e assim por diante. Ao mexer ali, a regra é: um bloco
+novo só chega ao prompt se couber num slot que a engine já lê — nunca criar chave nova esperando
+que a engine a leia.
+
+Paridade é contrato: uma versão **sem** dado estruturado precisa continuar produzindo o mesmo
+`raw` de antes (`tests/unit/test_calibration_builder.py` trava os dois lados). Por isso
+`criterion_weights` e o `final_score_rule` recompilado só aparecem quando a versão tem pesos.
+
+`MethodologyService.publish()` ganhou validações que devolvem 409: âncoras cobrindo exatamente os
+níveis 2/4/6/8/10 em cada critério e em cada pilar, pesos somando 1, e faixas de farol cobrindo
+0–10 sem buraco nem sobreposição. O `content` JSONB deixou de ser dict livre — `MethodologyContentIn`
+declara toda chave que a engine lê, movendo a falha de "KeyError no meio de uma análise paga" para
+422 na hora de salvar.
+
+`GET /methodology/{id}/prompt-preview` (ADMIN) devolve o texto exato que a engine receberá, reusando
+`build_system_preamble` e `_format_criteria` da própria engine — reimplementar a formatação aqui
+criaria a divergência silenciosa que a tela existe para evitar.
+
+Custo: o prompt de instrução saiu de ~6,3k para ~24k tokens por análise. É o preço de a IA não
+arbitrar a nota; o preâmbulo é estável entre chamadas, então o cache de prompt da OpenAI absorve
+boa parte.
+
+### Nota geral ponderada (Fase 9)
+
+`engine_integration/score_resolver.py` aplica os pesos de `methodology_categories.weight` sobre as
+notas por critério, **entre** `run_pipeline` e `export_reports` em `AnalysisService._run_pipeline` —
+assim o JSONB e os dois PDFs mostram a mesma nota, sem tocar o `rendering/` da engine. Soma em
+`Decimal` com `ROUND_HALF_UP`: em float, 0,15*9 + 0,20*5 + … dá 6,6499999 e o arredondamento
+bancário do Python levaria 7,95 para 7,9, mudando a faixa do farol no relatório do usuário.
+
+O julgamento holístico original da IA **nunca é descartado**: vai para
+`analyses.holistic_overall_score` / `holistic_overall_band_label`. O Manual V2.1 trata os pesos
+como "hipótese técnica a validar contra histórico", então o dado que permite questioná-los
+precisa sobreviver. Sem pesos (versão anterior à V2.1) a ponderação é no-op e a nota segue
+holística — análises antigas continuam reproduzíveis.
+
+Os pesos também são declarados no prompt, anexados a `final_score_rule` pelo compilador: sem isso
+a IA narraria uma faixa (`overall_justification`, `overall_classification_text`) incoerente com o
+número que o relatório exibe.
+
 ### Custo de IA (FinAI, Fase 8)
 
 `backend/app/ai_cost/` captura o consumo de OpenAI **sem tocar a engine**. Pacote próprio (não
@@ -271,8 +329,9 @@ Cada usuário tem cota diária de análises: `DAILY_ANALYSIS_LIMIT_PER_OWNER` (h
 
 `overall_band_label` dentro do JSONB `analysis_result` é a fonte de verdade. `app/core/farol.py`
 só traduz label → cor (mapa lido do Postgres, cobrindo versões arquivadas) → nível de UI. Backend e
-frontend **nunca** recalculam a faixa a partir de `overall_score`: a nota geral vem de julgamento
-holístico da IA, não de fórmula.
+frontend **nunca** recalculam a faixa a partir de `overall_score` — o único lugar que escreve esse
+label é `engine_integration/score_resolver.py`, via `Calibration.classify_band`, logo depois de
+aplicar os pesos e antes de o resultado ser persistido ou exportado.
 
 ## Arquitetura do frontend
 

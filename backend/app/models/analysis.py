@@ -7,7 +7,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -86,6 +86,14 @@ class Analysis(Base):
     # Resultados produzidos pela engine
     transcription: Mapped[dict | None] = mapped_column(JSONB)
     analysis_result: Mapped[dict | None] = mapped_column(JSONB)
+
+    # Nota geral holística que a IA produziu antes da ponderação pelos pesos da
+    # metodologia (Fase 9). analysis_result guarda a nota ponderada, que é a oficial;
+    # estes dois campos preservam o julgamento original para auditoria e para permitir
+    # medir a aderência da fórmula ao longo do tempo — o Manual V2.1 trata os pesos como
+    # hipótese a validar contra histórico, então o dado que os questiona não se descarta.
+    holistic_overall_score: Mapped[float | None] = mapped_column(Float)
+    holistic_overall_band_label: Mapped[str | None] = mapped_column(String(64))
     executive_report_path: Mapped[str | None] = mapped_column(String(500))
     detailed_report_path: Mapped[str | None] = mapped_column(String(500))
 

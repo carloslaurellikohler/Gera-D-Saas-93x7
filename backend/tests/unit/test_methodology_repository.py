@@ -129,6 +129,10 @@ def test_update_draft_replaces_categories_and_calibrators(db_session):
             {"key": "sondagem", "label": "Sondagem", "description": "d2", "order_index": 0, "extra": {}},
         ],
         calibrators=[],
+        anchors=[],
+        anchor_examples=[],
+        subdimensions=[],
+        eligibility_rules=[],
     )
 
     assert updated.calibration_version == "v1.1"

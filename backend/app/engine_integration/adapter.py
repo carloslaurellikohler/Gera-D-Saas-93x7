@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from app.engine_integration.audio_chunking import load_transcript_chunked, needs_chunking
 from app.engine_integration.calibration_builder import build_calibration
 from app.engine_integration.engine_settings_builder import build_engine_settings
+from app.engine_integration.score_resolver import apply_weighted_overall
 
 
 class NoPublishedMethodologyError(RuntimeError):
@@ -85,6 +86,12 @@ class EngineAdapter:
         return run_pipeline(
             transcript, metadata, settings=self._settings, calibration=self._calibration
         )
+
+    def apply_weighted_overall(self, result: AnalysisResult) -> tuple[float | None, str | None]:
+        """Aplica os pesos da metodologia publicada à nota geral, devolvendo o par
+        holístico original. Chamado entre run_pipeline e export_reports, para que os PDFs
+        já saiam com a nota oficial — ver score_resolver."""
+        return apply_weighted_overall(result, self._calibration)
 
     def export_reports(self, result: AnalysisResult, out_dir: Path) -> tuple[Path, Path]:
         return export_both(result, self._calibration, out_dir)

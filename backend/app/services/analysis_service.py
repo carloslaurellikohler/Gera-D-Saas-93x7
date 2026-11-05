@@ -302,10 +302,15 @@ class AnalysisService:
         # settings, para refletir o usuário que de fato criou a análise.
         metadata = build_input_metadata(analysis, cs_id=analysis.cs_id, cs_name=analysis.cs_name)
         result = self.engine.run_pipeline(transcript, metadata)
+        # Ponderação ANTES de persistir e de exportar: analysis_result e os dois PDFs
+        # precisam mostrar a mesma nota, e o rendering da engine não sabe de pesos.
+        holistic_score, holistic_band_label = self.engine.apply_weighted_overall(result)
         self.repo.update(
             analysis.id,
             analysis_result=result.model_dump(mode="json"),
             methodology_version_id=self.engine.methodology_id,
+            holistic_overall_score=holistic_score,
+            holistic_overall_band_label=holistic_band_label,
         )
         return result
 

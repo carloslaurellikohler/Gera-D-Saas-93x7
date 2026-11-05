@@ -2,26 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-_VALID_PAYLOAD = {
-    "calibration_version": "v2",
-    "methodology_name": "93x7®",
-    "project": "Projeto Teste",
-    "content": {"objective": "Avaliar."},
-    "categories": [
-        {"key": "posicionamento", "label": "Posicionamento", "description": "d", "order_index": 0, "extra": {}},
-        {"key": "conexao", "label": "Conexão", "description": "d", "order_index": 1, "extra": {}},
-        {"key": "sondagem", "label": "Sondagem", "description": "d", "order_index": 2, "extra": {}},
-        {"key": "direcionamento", "label": "Direcionamento", "description": "d", "order_index": 3, "extra": {}},
-        {"key": "encaminhamento", "label": "Encaminhamento", "description": "d", "order_index": 4, "extra": {}},
-        {"key": "eficiencia_conducao", "label": "Eficiência", "description": "d", "order_index": 5, "extra": {}},
-    ],
-    "calibrators": [
-        {"key": "excelente", "label": "Excelente", "color": "verde", "min": 8.0, "max": 10.0, "order_index": 0},
-        {"key": "atencao", "label": "Atenção", "color": "amarelo", "min": 7.0, "max": 7.9, "order_index": 1},
-        {"key": "prioritario", "label": "Prioritário", "color": "laranja", "min": 6.0, "max": 6.9, "order_index": 2},
-        {"key": "critico", "label": "Crítico", "color": "vermelho", "min": 0.0, "max": 5.9, "order_index": 3},
-    ],
-}
+from tests.methodology_factory import valid_payload_dict
+
+_VALID_PAYLOAD = valid_payload_dict()
 
 
 def test_list_methodologies_requires_authentication(unauthenticated_client):
@@ -138,3 +121,54 @@ def test_delete_published_methodology_is_rejected(admin_client):
     response = admin_client.delete(f"/api/v1/methodology/{created['id']}")
 
     assert response.status_code == 409
+
+
+# --- Fase 9 ------------------------------------------------------------------------
+
+
+def test_publish_with_incomplete_anchors_returns_409(admin_client):
+    created = admin_client.post("/api/v1/methodology/draft", json={}).json()
+    payload = valid_payload_dict(calibration_version="sem-ancora")
+    payload["anchors"] = [a for a in payload["anchors"] if a["scope_key"] != "conexao"]
+    admin_client.put(f"/api/v1/methodology/{created['id']}", json=payload)
+
+    response = admin_client.post(f"/api/v1/methodology/{created['id']}/publish")
+
+    assert response.status_code == 409
+    assert "conexao" in response.json()["detail"]
+
+
+def test_update_draft_with_incomplete_content_returns_422(admin_client):
+    """O `content` deixou de ser dict livre: faltar uma chave que a engine lê precisa
+    falhar aqui, e não como KeyError no meio de uma análise paga."""
+    created = admin_client.post("/api/v1/methodology/draft", json={}).json()
+    payload = valid_payload_dict(calibration_version="sem-pilares")
+    del payload["content"]["pillars"]
+
+    response = admin_client.put(f"/api/v1/methodology/{created['id']}", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_prompt_preview_shows_the_compiled_ruler(admin_client):
+    created = admin_client.post("/api/v1/methodology/draft", json={}).json()
+    admin_client.put(
+        f"/api/v1/methodology/{created['id']}", json=valid_payload_dict(calibration_version="previa")
+    )
+
+    response = admin_client.get(f"/api/v1/methodology/{created['id']}/prompt-preview")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["calibration_version"] == "previa"
+    # o preâmbulo precisa trazer os blocos globais editáveis
+    assert "Avaliar." in body["system_preamble"]
+    # e o bloco de critérios, a régua compilada a partir das tabelas novas
+    assert "sondagem nível 10." in body["criteria_block"]
+    assert "nota no máximo 7,9" in body["criteria_block"]
+    assert "Profundidade:" in body["criteria_block"]
+
+
+def test_prompt_preview_is_admin_only(client):
+    response = client.get(f"/api/v1/methodology/{uuid.uuid4()}/prompt-preview")
+    assert response.status_code == 403

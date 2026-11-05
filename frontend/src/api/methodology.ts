@@ -1,5 +1,10 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "./client";
-import type { MethodologyDetail, MethodologyDraftPayload, MethodologySummary } from "../types/methodology";
+import type {
+  MethodologyDetail,
+  MethodologyDraftPayload,
+  MethodologyPromptPreview,
+  MethodologySummary,
+} from "../types/methodology";
 
 export function listMethodologies() {
   return apiGet<MethodologySummary[]>("/methodology");
@@ -27,4 +32,8 @@ export function publishMethodology(id: string) {
 
 export function deleteMethodologyDraft(id: string) {
   return apiDelete(`/methodology/${id}`);
+}
+
+export function getMethodologyPromptPreview(id: string) {
+  return apiGet<MethodologyPromptPreview>(`/methodology/${id}/prompt-preview`);
 }

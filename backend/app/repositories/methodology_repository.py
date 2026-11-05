@@ -6,7 +6,27 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.analysis import Analysis
-from app.models.methodology import Calibrator, Methodology, MethodologyCategory, MethodologyStatus
+from app.models.methodology import (
+    Calibrator,
+    Methodology,
+    MethodologyAnchor,
+    MethodologyAnchorExample,
+    MethodologyCategory,
+    MethodologyEligibilityRule,
+    MethodologyStatus,
+    MethodologySubdimension,
+)
+
+# Carregadas juntas em toda leitura de uma versão: o calibration_builder precisa das seis
+# coleções para compilar o prompt, e uma análise não pode pagar N+1 por isso.
+_ALL_CHILDREN = (
+    Methodology.categories,
+    Methodology.calibrators,
+    Methodology.anchors,
+    Methodology.anchor_examples,
+    Methodology.subdimensions,
+    Methodology.eligibility_rules,
+)
 
 
 class MethodologyRepository:
@@ -23,7 +43,7 @@ class MethodologyRepository:
         stmt = (
             select(Methodology)
             .where(Methodology.id == methodology_id)
-            .options(selectinload(Methodology.categories), selectinload(Methodology.calibrators))
+            .options(*(selectinload(child) for child in _ALL_CHILDREN))
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
@@ -31,7 +51,7 @@ class MethodologyRepository:
         stmt = (
             select(Methodology)
             .where(Methodology.status == MethodologyStatus.PUBLISHED)
-            .options(selectinload(Methodology.categories), selectinload(Methodology.calibrators))
+            .options(*(selectinload(child) for child in _ALL_CHILDREN))
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
@@ -49,6 +69,10 @@ class MethodologyRepository:
         content: dict,
         categories: list[dict],
         calibrators: list[dict],
+        anchors: list[dict],
+        anchor_examples: list[dict],
+        subdimensions: list[dict],
+        eligibility_rules: list[dict],
     ) -> Methodology | None:
         """Edição de rascunho = substituir tudo (campos + filhas) numa única
         transação — mais simples e seguro do que diff parcial. Limpa e dá flush nas
@@ -67,10 +91,18 @@ class MethodologyRepository:
 
         methodology.categories = []
         methodology.calibrators = []
+        methodology.anchors = []
+        methodology.anchor_examples = []
+        methodology.subdimensions = []
+        methodology.eligibility_rules = []
         self.db.flush()
 
         methodology.categories = [MethodologyCategory(**category) for category in categories]
         methodology.calibrators = [Calibrator(**calibrator) for calibrator in calibrators]
+        methodology.anchors = [MethodologyAnchor(**anchor) for anchor in anchors]
+        methodology.anchor_examples = [MethodologyAnchorExample(**example) for example in anchor_examples]
+        methodology.subdimensions = [MethodologySubdimension(**sub) for sub in subdimensions]
+        methodology.eligibility_rules = [MethodologyEligibilityRule(**rule) for rule in eligibility_rules]
         self.db.commit()
         self.db.refresh(methodology)
         return methodology
