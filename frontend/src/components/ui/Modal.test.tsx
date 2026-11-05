@@ -111,4 +111,56 @@ describe("Modal", () => {
 
     expect(document.body.style.overflow).not.toBe("hidden");
   });
+  it("renders the footer and the header actions when given", () => {
+    render(
+      <Modal
+        open
+        title="Novo item"
+        onClose={vi.fn()}
+        headerActions={<span>Rascunho</span>}
+        footer={<button type="button">Publicar</button>}
+      >
+        <input aria-label="Campo" />
+      </Modal>,
+    );
+
+    expect(screen.getByText("Rascunho")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publicar" })).toBeInTheDocument();
+  });
+
+  it("keeps the initial focus in the body even with a footer present", async () => {
+    render(
+      <Modal open title="Novo item" onClose={vi.fn()} footer={<button type="button">Publicar</button>}>
+        <input aria-label="Campo" />
+      </Modal>,
+    );
+
+    await screen.findByRole("dialog");
+    expect(screen.getByLabelText("Campo")).toHaveFocus();
+  });
+
+  it("includes the footer buttons in the focus trap", async () => {
+    const user = userEvent.setup();
+    render(
+      <Modal open title="Novo item" onClose={vi.fn()} footer={<button type="button">Publicar</button>}>
+        <input aria-label="Campo" />
+      </Modal>,
+    );
+
+    // O rodapé é o último focável do painel: daí o Tab volta para o Fechar, o primeiro.
+    screen.getByRole("button", { name: "Publicar" }).focus();
+    await user.tab();
+
+    expect(screen.getByRole("button", { name: "Fechar" })).toHaveFocus();
+  });
+
+  it("applies the full size class", () => {
+    render(
+      <Modal open title="Novo item" onClose={vi.fn()} size="full">
+        <input aria-label="Campo" />
+      </Modal>,
+    );
+
+    expect(screen.getByRole("dialog")).toHaveClass("ui-modal-panel-full");
+  });
 });

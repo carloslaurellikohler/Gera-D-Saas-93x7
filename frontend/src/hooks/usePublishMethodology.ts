@@ -5,8 +5,11 @@ export function usePublishMethodology() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => publishMethodology(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["methodology"] });
+    // Aqui a invalidação é por prefixo de propósito: publicar encerra a versão que estava
+    // ativa, então o detalhe dela em cache também envelheceu.
+    onSuccess: (published, id) => {
+      queryClient.setQueryData(["methodology", id], published);
+      return queryClient.invalidateQueries({ queryKey: ["methodology"] });
     },
   });
 }

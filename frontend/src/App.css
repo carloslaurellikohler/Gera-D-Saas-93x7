@@ -435,9 +435,12 @@ h3 {
   display: flex;
   gap: 28px;
   border-bottom: 1px solid var(--border-secondary);
+  overflow-x: auto;
 }
 
 .tabs button {
+  flex: none;
+  white-space: nowrap;
   padding: 12px 0;
   margin-bottom: -1px;
   border: none;
@@ -1110,7 +1113,7 @@ h3 {
 .ui-confirm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 1100;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
@@ -1203,6 +1206,12 @@ h3 {
   max-width: 640px;
 }
 
+/* Editor da metodologia: 7 abas de formulário não cabem nos tamanhos acima. */
+.ui-modal-panel-full {
+  max-width: 1200px;
+  max-height: 92vh;
+}
+
 .ui-modal-header {
   display: flex;
   align-items: center;
@@ -1214,10 +1223,19 @@ h3 {
 }
 
 .ui-modal-title {
+  flex: 1;
+  min-width: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--content-primary);
   margin: 0;
+}
+
+.ui-modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .ui-modal-close {
@@ -1242,6 +1260,23 @@ h3 {
   padding: 24px;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.methodology-saved {
+  margin-right: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--content-success, var(--content-secondary));
+}
+
+.ui-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-secondary);
+  flex-shrink: 0;
 }
 
 /* ============================= Metodologia (/calibracao) ============================= */
@@ -1424,15 +1459,6 @@ h3 {
 
 .methodology-weight-row input {
   width: 90px;
-}
-
-.methodology-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-secondary);
 }
 
 /* O prompt é texto cru que a IA recebe: precisa de fonte monoespaçada e quebra fiel. */

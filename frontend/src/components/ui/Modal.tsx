@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import Icon from "./Icon";
 
-export type ModalSize = "medium" | "large";
+export type ModalSize = "medium" | "large" | "full";
 
 export interface ModalProps {
   open: boolean;
@@ -9,6 +9,10 @@ export interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   size?: ModalSize;
+  /** Barra de ações fixa no rodapé. Fica fora do corpo rolável, mas dentro do focus trap. */
+  footer?: ReactNode;
+  /** Ações no cabeçalho, entre o título e o botão de fechar (ex.: badge de status). */
+  headerActions?: ReactNode;
 }
 
 const FOCUSABLE_SELECTOR = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
@@ -20,7 +24,15 @@ function getFocusable(container: HTMLElement | null): HTMLElement[] {
   );
 }
 
-export default function Modal({ open, title, onClose, children, size = "medium" }: ModalProps) {
+export default function Modal({
+  open,
+  title,
+  onClose,
+  children,
+  size = "medium",
+  footer,
+  headerActions,
+}: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -81,6 +93,7 @@ export default function Modal({ open, title, onClose, children, size = "medium" 
           <h2 id={titleId} className="ui-modal-title">
             {title}
           </h2>
+          {headerActions ? <div className="ui-modal-header-actions">{headerActions}</div> : null}
           <button type="button" className="ui-modal-close" aria-label="Fechar" onClick={onClose}>
             <Icon name="close" size={20} />
           </button>
@@ -88,6 +101,7 @@ export default function Modal({ open, title, onClose, children, size = "medium" 
         <div ref={bodyRef} className="ui-modal-body">
           {children}
         </div>
+        {footer ? <div className="ui-modal-footer">{footer}</div> : null}
       </div>
     </div>
   );

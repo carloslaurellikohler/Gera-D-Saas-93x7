@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getMethodologyPromptPreview } from "../api/methodology";
 
 /**
- * O prompt compilado muda a cada salvamento do rascunho, então a query é invalidada
- * junto com ["methodology", id] em useUpdateMethodologyDraft.
+ * O prompt compilado muda a cada salvamento do rascunho, então esta query é invalidada
+ * explicitamente por useUpdateMethodologyDraft.
  */
 export function useMethodologyPromptPreview(id: string | null, enabled: boolean) {
   return useQuery({

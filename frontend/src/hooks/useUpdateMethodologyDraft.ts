@@ -7,9 +7,14 @@ export function useUpdateMethodologyDraft() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: MethodologyDraftPayload }) =>
       updateMethodologyDraft(id, payload),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["methodology"] });
-      queryClient.invalidateQueries({ queryKey: ["methodology", variables.id] });
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData(["methodology", variables.id], updated);
+      // A prévia do prompt é recompilada a cada salvamento; com a lista invalidada de
+      // forma exata, ela precisa ser dita explicitamente.
+      queryClient.invalidateQueries({
+        queryKey: ["methodology", variables.id, "prompt-preview"],
+      });
+      return queryClient.invalidateQueries({ queryKey: ["methodology"], exact: true });
     },
   });
 }

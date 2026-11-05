@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import CalibrationPage from "./CalibrationPage";
 import { ConfirmProvider } from "../context/ConfirmContext";
+import { ApiError } from "../api/client";
 import * as methodologyApi from "../api/methodology";
 import type {
   MethodologyContent,
@@ -12,7 +13,7 @@ import type {
 } from "../types/methodology";
 
 function renderPage() {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
@@ -138,9 +139,16 @@ function detailFor(summary: MethodologySummary): MethodologyDetail {
   };
 }
 
-function mockVersion(summary: MethodologySummary) {
-  vi.spyOn(methodologyApi, "listMethodologies").mockResolvedValue([summary]);
-  vi.spyOn(methodologyApi, "getMethodology").mockResolvedValue(detailFor(summary));
+/**
+ * A lista e os detalhes são servidos de estado mutável: é isso que permite testar que a
+ * tabela acompanha um save/delete sem recarregar a página.
+ */
+let versionList: MethodologySummary[] = [];
+let detailById: Record<string, MethodologyDetail> = {};
+
+function serveVersions(...summaries: MethodologySummary[]) {
+  versionList = summaries;
+  detailById = Object.fromEntries(summaries.map((s) => [s.id, detailFor(s)]));
 }
 
 /** As abas carregam sob demanda; o teste navega como o usuário navega. */
@@ -148,44 +156,76 @@ function goToTab(name: string) {
   fireEvent.click(screen.getByRole("button", { name }));
 }
 
+/** A edição agora vive num modal: todo teste de formulário passa por aqui. */
+async function openEditor(action: "Editar" | "Visualizar" = "Editar") {
+  fireEvent.click(await screen.findByRole("button", { name: action }));
+}
+
+/** Com o editor aberto, o mesmo nome aparece no modal e na tabela: escopa na tabela. */
+function versionsTable() {
+  return within(screen.getByRole("region", { name: "Versões da metodologia" }));
+}
+
+/** O modal do editor e o ConfirmDialog são ambos role="dialog" — desambigua pelo título. */
+function confirmDialog(title: string) {
+  return screen.findByRole("dialog", { name: new RegExp(title) });
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
+  versionList = [];
+  detailById = {};
+  vi.spyOn(methodologyApi, "listMethodologies").mockImplementation(async () => versionList);
+  vi.spyOn(methodologyApi, "getMethodology").mockImplementation(async (id: string) => {
+    const detail = detailById[id];
+    if (!detail) throw new ApiError(404, "Metodologia não encontrada.");
+    return detail;
+  });
 });
 
 describe("CalibrationPage", () => {
-  it("lists versions and shows the detail of the first one by default", async () => {
-    mockVersion(PUBLISHED_SUMMARY);
+  it("lists the versions in a table and keeps the editor closed", async () => {
+    serveVersions(DRAFT_SUMMARY, PUBLISHED_SUMMARY);
 
     renderPage();
 
-    // Versão publicada é só leitura: o nome aparece como texto, na lista e no detalhe.
-    expect((await screen.findAllByText("93x7 Franq | Calibration v1.0")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ativa").length).toBeGreaterThan(0);
+    expect(await screen.findByText("v2 (rascunho)")).toBeInTheDocument();
+    expect(screen.getByText("93x7 Franq | Calibration v1.0")).toBeInTheDocument();
+    expect(screen.getByText("Rascunho")).toBeInTheDocument();
+    expect(screen.getByText("Ativa")).toBeInTheDocument();
+    // Nada de formulário antes de abrir o modal.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("Salvar rascunho")).not.toBeInTheDocument();
   });
 
-  it("shows editable controls only for a DRAFT version", async () => {
-    mockVersion(DRAFT_SUMMARY);
+  it("opens a DRAFT in the modal with editable controls", async () => {
+    serveVersions(DRAFT_SUMMARY);
 
     renderPage();
+    await openEditor();
 
     expect(await screen.findByDisplayValue("v2 (rascunho)")).toBeInTheDocument();
     expect(screen.getByText("Salvar rascunho")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Publicar/ })).toBeInTheDocument();
+    expect(screen.getByText("Excluir rascunho")).toBeInTheDocument();
   });
 
-  it("does not show editable controls for a PUBLISHED version", async () => {
-    mockVersion(PUBLISHED_SUMMARY);
+  it("opens a PUBLISHED version read-only", async () => {
+    serveVersions(PUBLISHED_SUMMARY);
 
     renderPage();
+    await openEditor("Visualizar");
 
-    await screen.findByText("Metodologia e calibração");
+    await screen.findByRole("dialog");
     expect(screen.queryByText("Salvar rascunho")).not.toBeInTheDocument();
+    expect(screen.queryByText("Excluir rascunho")).not.toBeInTheDocument();
   });
 
   it("shows the anchors, examples, subdimensions and caps of a criterion", async () => {
-    mockVersion(DRAFT_SUMMARY);
+    serveVersions(DRAFT_SUMMARY);
 
     renderPage();
+    await openEditor();
     await screen.findByDisplayValue("v2 (rascunho)");
     goToTab("Critérios");
 
@@ -197,12 +237,11 @@ describe("CalibrationPage", () => {
   });
 
   it("warns when the criterion weights do not add up to 100%", async () => {
-    const detail = detailFor(DRAFT_SUMMARY);
-    detail.categories[0].weight = 0.5;
-    vi.spyOn(methodologyApi, "listMethodologies").mockResolvedValue([DRAFT_SUMMARY]);
-    vi.spyOn(methodologyApi, "getMethodology").mockResolvedValue(detail);
+    serveVersions(DRAFT_SUMMARY);
+    detailById[DRAFT_SUMMARY.id].categories[0].weight = 0.5;
 
     renderPage();
+    await openEditor();
     await screen.findByDisplayValue("v2 (rascunho)");
     goToTab("Régua e nota");
 
@@ -210,12 +249,13 @@ describe("CalibrationPage", () => {
   });
 
   it("saves the draft with the structured rationale included", async () => {
-    mockVersion(DRAFT_SUMMARY);
+    serveVersions(DRAFT_SUMMARY);
     const updateSpy = vi
       .spyOn(methodologyApi, "updateMethodologyDraft")
       .mockResolvedValue(detailFor(DRAFT_SUMMARY));
 
     renderPage();
+    await openEditor();
     await screen.findByDisplayValue("v2 (rascunho)");
     fireEvent.click(screen.getByText("Salvar rascunho"));
 
@@ -227,7 +267,7 @@ describe("CalibrationPage", () => {
   });
 
   it("fetches the compiled prompt only when the preview tab is opened", async () => {
-    mockVersion(DRAFT_SUMMARY);
+    serveVersions(DRAFT_SUMMARY);
     const previewSpy = vi.spyOn(methodologyApi, "getMethodologyPromptPreview").mockResolvedValue({
       calibration_version: "v2 (rascunho)",
       system_preamble: "PREÂMBULO COMPILADO",
@@ -235,6 +275,7 @@ describe("CalibrationPage", () => {
     });
 
     renderPage();
+    await openEditor();
     await screen.findByDisplayValue("v2 (rascunho)");
     expect(previewSpy).not.toHaveBeenCalled();
 
@@ -243,20 +284,182 @@ describe("CalibrationPage", () => {
     expect(await screen.findByText("PREÂMBULO COMPILADO")).toBeInTheDocument();
   });
 
-  it("publishes the selected draft after confirmation", async () => {
-    mockVersion(DRAFT_SUMMARY);
+  it("publishes the selected draft after confirmation and reflects it in the table", async () => {
+    serveVersions(DRAFT_SUMMARY);
     const publishSpy = vi
       .spyOn(methodologyApi, "publishMethodology")
-      .mockResolvedValue({ ...detailFor(DRAFT_SUMMARY), status: "PUBLISHED" });
+      .mockImplementation(async () => {
+        const published: MethodologySummary = {
+          ...DRAFT_SUMMARY,
+          status: "PUBLISHED",
+          published_at: "2026-11-05T00:00:00Z",
+        };
+        serveVersions(published);
+        return detailFor(published);
+      });
 
     renderPage();
-
+    await openEditor();
     await screen.findByDisplayValue("v2 (rascunho)");
     fireEvent.click(screen.getByRole("button", { name: /^Publicar/ }));
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await confirmDialog("Publicar");
     fireEvent.click(within(dialog).getByRole("button", { name: "Publicar" }));
 
     await waitFor(() => expect(publishSpy).toHaveBeenCalledWith("v2"));
+    // A tabela atrás do modal acompanha a mudança de estado, sem F5.
+    await waitFor(() => expect(versionsTable().getByText("Ativa")).toBeInTheDocument());
+  });
+
+  it("removes the deleted draft from the table without a reload", async () => {
+    serveVersions(DRAFT_SUMMARY, PUBLISHED_SUMMARY);
+    const deleteSpy = vi
+      .spyOn(methodologyApi, "deleteMethodologyDraft")
+      .mockImplementation(async () => {
+        serveVersions(PUBLISHED_SUMMARY);
+      });
+
+    renderPage();
+    await openEditor();
+    await screen.findByDisplayValue("v2 (rascunho)");
+    fireEvent.click(screen.getByText("Excluir rascunho"));
+
+    const dialog = await confirmDialog("Excluir o rascunho");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Excluir" }));
+
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith("v2"));
+    // O modal fecha e a linha some — era aqui que só o F5 resolvia.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("v2 (rascunho)")).not.toBeInTheDocument());
+    expect(screen.getByText("93x7 Franq | Calibration v1.0")).toBeInTheDocument();
+  });
+
+  it("updates the table with the renamed version right after saving", async () => {
+    serveVersions(DRAFT_SUMMARY);
+    vi.spyOn(methodologyApi, "updateMethodologyDraft").mockImplementation(
+      async (id: string, payload) => {
+        const renamed: MethodologySummary = {
+          ...DRAFT_SUMMARY,
+          calibration_version: payload.calibration_version,
+        };
+        serveVersions(renamed);
+        return { ...detailFor(renamed), ...payload, id, status: "DRAFT" } as MethodologyDetail;
+      },
+    );
+
+    renderPage();
+    await openEditor();
+    const nameInput = await screen.findByDisplayValue("v2 (rascunho)");
+    fireEvent.change(nameInput, { target: { value: "v2.1 (rascunho)" } });
+    fireEvent.click(screen.getByText("Salvar rascunho"));
+
+    expect(await screen.findByText("Rascunho salvo")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(versionsTable().getByText("v2.1 (rascunho)")).toBeInTheDocument(),
+    );
+  });
+
+  it("asks before discarding unsaved edits and keeps the modal open on cancel", async () => {
+    serveVersions(DRAFT_SUMMARY);
+
+    renderPage();
+    await openEditor();
+    const nameInput = await screen.findByDisplayValue("v2 (rascunho)");
+    fireEvent.change(nameInput, { target: { value: "editado sem salvar" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+
+    const dialog = await confirmDialog("Descartar alterações não salvas");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+
+    expect(await screen.findByDisplayValue("editado sem salvar")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+    const again = await confirmDialog("Descartar alterações não salvas");
+    fireEvent.click(within(again).getByRole("button", { name: "Descartar" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("closes without confirmation when nothing was edited", async () => {
+    serveVersions(DRAFT_SUMMARY);
+
+    renderPage();
+    await openEditor();
+    await screen.findByDisplayValue("v2 (rascunho)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("disables the footer actions while the save is in flight", async () => {
+    serveVersions(DRAFT_SUMMARY);
+    let resolveSave: (value: MethodologyDetail) => void = () => {};
+    vi.spyOn(methodologyApi, "updateMethodologyDraft").mockReturnValue(
+      new Promise<MethodologyDetail>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+
+    renderPage();
+    await openEditor();
+    await screen.findByDisplayValue("v2 (rascunho)");
+    fireEvent.click(screen.getByText("Salvar rascunho"));
+
+    expect(await screen.findByText("Salvando…")).toBeInTheDocument();
+    expect(screen.getByText("Excluir rascunho")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Publicar/ })).toBeDisabled();
+
+    resolveSave(detailFor(DRAFT_SUMMARY));
+    await waitFor(() => expect(screen.getByText("Salvar rascunho")).toBeEnabled());
+  });
+  it("switches to the new draft from the mutation response, without an empty flash", async () => {
+    const NEW_DRAFT: MethodologySummary = {
+      ...DRAFT_SUMMARY,
+      id: "v3",
+      calibration_version: "v3 (rascunho)",
+    };
+    serveVersions(DRAFT_SUMMARY);
+    vi.spyOn(methodologyApi, "createMethodologyDraft").mockImplementation(async () => {
+      serveVersions(NEW_DRAFT, DRAFT_SUMMARY);
+      return detailFor(NEW_DRAFT);
+    });
+    // O GET de "v3" fica pendurado de propósito: o que renderiza o editor é o detalhe
+    // semeado no cache pela resposta do POST, não um refetch.
+    vi.mocked(methodologyApi.getMethodology).mockImplementation(
+      (id: string) =>
+        id === "v3" ? new Promise(() => {}) : Promise.resolve(detailById[id]),
+    );
+
+    renderPage();
+    await openEditor();
+    await screen.findByDisplayValue("v2 (rascunho)");
+
+    fireEvent.click(screen.getByRole("button", { name: /Nova versão a partir desta/ }));
+
+    expect(await screen.findByDisplayValue("v3 (rascunho)")).toBeInTheDocument();
+    expect(screen.queryByText("Carregando…")).not.toBeInTheDocument();
+  });
+
+  it("refetches the compiled prompt after the draft is saved", async () => {
+    serveVersions(DRAFT_SUMMARY);
+    const previewSpy = vi.spyOn(methodologyApi, "getMethodologyPromptPreview").mockResolvedValue({
+      calibration_version: "v2 (rascunho)",
+      system_preamble: "PREÂMBULO COMPILADO",
+      criteria_block: "### Posicionamento",
+    });
+    vi.spyOn(methodologyApi, "updateMethodologyDraft").mockResolvedValue(detailFor(DRAFT_SUMMARY));
+
+    renderPage();
+    await openEditor();
+    await screen.findByDisplayValue("v2 (rascunho)");
+    goToTab("Prévia do prompt");
+    await screen.findByText("PREÂMBULO COMPILADO");
+    expect(previewSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByText("Salvar rascunho"));
+
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledTimes(2));
   });
 });
