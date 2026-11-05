@@ -6,6 +6,7 @@ import CalibrationPage from "./CalibrationPage";
 import { ConfirmProvider } from "../context/ConfirmContext";
 import { ApiError } from "../api/client";
 import * as methodologyApi from "../api/methodology";
+import { formatDate } from "../lib/format";
 import type {
   MethodologyContent,
   MethodologyDetail,
@@ -193,6 +194,14 @@ describe("CalibrationPage", () => {
     expect(screen.getByText("93x7 Franq | Calibration v1.0")).toBeInTheDocument();
     expect(screen.getByText("Rascunho")).toBeInTheDocument();
     expect(screen.getByText("Ativa")).toBeInTheDocument();
+    // Um rascunho não tem data de publicação; "Criada em" é o que o situa no tempo.
+    expect(
+      versionsTable().getAllByText(formatDate(DRAFT_SUMMARY.created_at)),
+    ).toHaveLength(2);
+    expect(
+      versionsTable().getByText(formatDate(PUBLISHED_SUMMARY.published_at)),
+    ).toBeInTheDocument();
+    expect(versionsTable().getByText("—")).toBeInTheDocument();
     // Nada de formulário antes de abrir o modal.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByText("Salvar rascunho")).not.toBeInTheDocument();

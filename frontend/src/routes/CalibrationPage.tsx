@@ -8,7 +8,12 @@ import { useCreateMethodologyDraft } from "../hooks/useCreateMethodologyDraft";
 import { useMethodologies } from "../hooks/useMethodologies";
 import { formatDate } from "../lib/format";
 
-const COLUMNS = "1fr 130px 140px 120px";
+// Cabeçalho e linhas são grids independentes, então toda faixa precisa resolver para a
+// mesma largura nos dois: nada de `max-content` aqui, que daria 0 na célula vazia do
+// cabeçalho e desalinharia as colunas. A faixa de ação é fixa e com folga sobre o botão
+// (ícone + rótulo ≈ 155px) porque o `.data-table` tem `overflow: hidden` e cortaria o
+// que passasse.
+const COLUMNS = "minmax(0, 2fr) 140px minmax(120px, 1fr) minmax(120px, 1fr) 180px";
 
 export default function CalibrationPage() {
   const { data: versions, isLoading, isError } = useMethodologies();
@@ -70,6 +75,7 @@ export default function CalibrationPage() {
           <div className="data-table-row data-table-head" style={{ gridTemplateColumns: COLUMNS }}>
             <span>Versão</span>
             <span>Estado</span>
+            <span>Criada em</span>
             <span>Publicada em</span>
             <span />
           </div>
@@ -83,8 +89,9 @@ export default function CalibrationPage() {
               <span>
                 <span className="pill">{STATUS_LABEL[version.status]}</span>
               </span>
-              <span>{version.published_at ? formatDate(version.published_at) : "—"}</span>
-              <span>
+              <span>{formatDate(version.created_at)}</span>
+              <span>{formatDate(version.published_at)}</span>
+              <span style={{ justifySelf: "end" }}>
                 <button
                   type="button"
                   className="btn btn-secondary"
